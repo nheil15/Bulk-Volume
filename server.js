@@ -138,7 +138,8 @@ app.post('/api/calculate', (req, res) => {
       waterSaturation,
       boiFormationVolumeFactor,
       partialHeight,
-      partialArea
+      partialArea,
+      missingField
     } = req.body;
     
     if (!crossSections || !heights || !Array.isArray(methods)) {
@@ -158,6 +159,27 @@ app.post('/api/calculate', (req, res) => {
         areasIn2: crossSections,
         areasInAcres: areasInAcres.map(a => a.toFixed(2))
       };
+    }
+
+    // If a missing field is specified, calculate it from OOIP
+    let calculatedMissing = null;
+    if (missingField) {
+      // For this calculation, we need OOIP to solve for the missing field
+      // We'll calculate OOIP from the non-missing fields first
+      const bv = trapezoidalRule(heights, areasInAcres, partialHeight, partialArea);
+      let usedPorosity = porosity ? porosity / 100 : 0.25;
+      let usedWaterSat = waterSaturation ? waterSaturation / 100 : 0.30;
+      let usedBoi = boiFormationVolumeFactor || 1.4;
+      
+      if (missingField === 'porosity') {
+        // Prompt user for OOIP or use calculated OOIP as reference
+        // For now, we'll allow the frontend to handle this
+        calculatedMissing = { porosity: null }; // Placeholder
+      } else if (missingField === 'waterSat') {
+        calculatedMissing = { waterSat: null };
+      } else if (missingField === 'boiFactor') {
+        calculatedMissing = { boiFactor: null };
+      }
     }
 
     if (methods.includes('trapezoidal')) {

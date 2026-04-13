@@ -8,133 +8,121 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="header-content">
-                <div>
-                    <h1>Bulk Volume Calculator</h1>
-                    <p class="subtitle">Calculate bulk volume and Original Oil in Place</p>
+    <div class="main-wrapper">
+        <div class="chat-container">
+            <div class="chat-header">
+                <div class="missing-buttons-group">
+                    <button type="button" id="missingPorosityBtn" class="btn btn-missing-field">φ Missing</button>
+                    <button type="button" id="missingSwiBtn" class="btn btn-missing-field">Swi Missing</button>
+                    <button type="button" id="missingBoiBtn" class="btn btn-missing-field">Boi Missing</button>
                 </div>
-            </div>
-        </header>
-
-        <!-- Formula Info Section - Hidden -->
-        <div class="formula-info-section" style="display: none;">
-            <div id="formula-trapezoidal" class="formula-info active">
-                <div class="formula-description">
-                    <h3>Trapezoidal Rule</h3>
-                    <code>V = (h/2) × [A₀ + 2A₁ + 2A₂ + ... + Aₙ]</code>
-                    <div class="formula-pros">
-                        <p><strong>✓ Advantages:</strong> Simple computation, works for any number of sections, good for linear changes</p>
-                        <p><strong>⚠ Considerations:</strong> Less accurate for curved surfaces</p>
-                    </div>
-                </div>
+                <p class="subtitle-text">Bulk Volume Calculator</p>
             </div>
 
-            <div id="formula-pyramid" class="formula-info">
-                <div class="formula-description">
-                    <h3>Pyramid Rule (Simpson's 1/3)</h3>
-                    <code>V = (h/3) × [A₀ + 4A₁ + 2A₂ + 4A₃ + ... + Aₙ]</code>
-                    <div class="formula-pros">
-                        <p><strong>✓ Advantages:</strong> Parabolic approximation, better accuracy</p>
-                        <p><strong>⚠ Requirements:</strong> Odd number of sections • Condition: An/An-1 ≤ 0.5</p>
-                    </div>
-                </div>
-            </div>
+            <div class="chat-content">
+                <div class="input-section">
+                    <form class="calculator-form" id="calculatorForm">
 
-            <div id="formula-simpson38" class="formula-info">
-                <div class="formula-description">
-                    <h3>Simpson's 3/8 Rule</h3>
-                    <code>V = (3h/8) × [A₀ + 3A₁ + 3A₂ + 2A₃ + ...]</code>
-                    <div class="formula-pros">
-                        <p><strong>✓ Advantages:</strong> Cubic polynomial, most accurate method, best for smooth curves</p>
-                        <p><strong>✓ Best For:</strong> Highest precision results and complex geometries</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+                        <!-- Collapsible input panels -->
+                        <div class="input-panels">
+                            <!-- Input Data Panel -->
+                            <details class="panel-details" open>
+                                <summary class="panel-summary">📝 Input Data</summary>
+                                <div class="panel-content input-data-layout">
+                                    <!-- Left Column: Input Fields -->
+                                    <div class="input-fields-column">
+                                        <div class="form-group">
+                                            <label for="spacing">Contour Interval (ft):</label>
+                                            <input type="number" id="spacing" min="0.1" max="100" step="0.1" value="10" placeholder="e.g., 10" required>
+                                        </div>
 
-        <!-- Main Content Grid -->
-        <div class="main-content">
-            <!-- Left Panel: Data Input -->
-            <div class="panel input-panel">
-                <h2>Input Data</h2>
-                
-                <div class="form-group">
-                    <label for="numSections">Number of Sections:</label>
-                    <input type="number" id="numSections" min="2" max="50" value="5" required>
-                </div>
+                                        <div class="data-buttons">
+                                            <div class="buttons-row-1">
+                                                <button type="button" id="addRowBtn" class="btn btn-secondary">+ Add Row</button>
+                                                <label class="btn btn-secondary file-btn">
+                                                    📤 Upload CSV
+                                                    <input type="file" id="csvFile" accept=".csv">
+                                                </label>
+                                            </div>
+                                            <div class="buttons-row-2">
+                                                <button type="button" id="formulasBtn" class="btn btn-secondary">✨ Formulas</button>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                <div class="form-group">
-                    <label for="spacing">Contour Interval (ft):</label>
-                    <input type="number" id="spacing" min="0.1" max="100" step="0.1" value="10" required>
-                </div>
+                                    <!-- Right Column: Input Summary -->
+                                    <div class="input-summary-column">
+                                        <div id="dataTableWrapper" class="data-table-wrapper compact">
+                                            <h3>Input Summary</h3>
+                                            <table id="inputTable" class="data-table"></table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
 
-                <div id="dataTableWrapper" class="data-table-wrapper">
-                    <h3>Input Summary</h3>
-                    <table id="inputTable" class="data-table"></table>
-                </div>
+                            <!-- Reservoir Properties Panel -->
+                            <details class="panel-details">
+                                <summary class="panel-summary">⚙️ Reservoir Properties <span class="arrow">▼</span></summary>
+                                <div class="panel-content">
+                                    <div class="form-group">
+                                        <label for="mapScale">Map Scale (1:X):</label>
+                                        <input type="number" id="mapScale" min="1000" max="1000000" value="15000" placeholder="e.g., 15000" required>
+                                        <small>Converts in² to acres</small>
+                                    </div>
 
-                <div class="data-buttons">
-                    <button id="addRowBtn" class="btn btn-add-row">+ Add Row</button>
-                    <label class="btn btn-secondary file-btn">
-                        Upload CSV
-                        <input type="file" id="csvFile" accept=".csv">
-                    </label>
-                </div>
-            </div>
-
-            <!-- Middle Panel: Reservoir Properties -->
-            <div class="panel properties-panel">
-                <h2>Reservoir Properties</h2>
-                
-                <div class="form-group">
-                    <label for="mapScale">Map Scale (1:X):</label>
-                    <input type="number" id="mapScale" min="1000" max="1000000" value="15000" required>
-                    <small>Converts in² to acres</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="porosity">Porosity (φ) %:</label>
-                    <input type="number" id="porosity" min="0" max="100" step="0.1" value="25" required>
-                </div>
+                                    <div class="form-group">
+                                        <label for="porosity">Porosity (φ) %:</label>
+                                        <input type="number" id="porosity" min="0" max="100" step="0.1" value="25" placeholder="e.g., 25" required>
+                                    </div>
 
                 <div class="form-group">
                     <label for="waterSat">Water Saturation (Swi) %:</label>
-                    <input type="number" id="waterSat" min="0" max="100" step="0.1" value="30" required>
+                    <input type="number" id="waterSat" min="0" max="100" step="0.1" value="30" placeholder="e.g., 30" required>
                 </div>
 
-                <div class="form-group">
-                    <label for="boiFactor">Oil Formation Factor (Boi) bbl/STB:</label>
-                    <input type="number" id="boiFactor" min="0.1" max="10" step="0.1" value="1.4" required
+                                    <div class="form-group">
+                                        <label for="boiFactor">Oil Formation Factor (Boi) bbl/STB:</label>
+                                        <input type="number" id="boiFactor" min="0.1" max="10" step="0.1" value="1.4" placeholder="e.g., 1.4" required>
+                                    </div>
+
+                                    <div class="form-group" id="nFieldGroup" style="display: none;">
+                                        <label for="ooipValue">OOIP (N) STB:</label>
+                                        <input type="number" id="ooipValue" min="0" step="1" placeholder="e.g., 6640771">
+                                        <small>Original Oil In Place value</small>
+                                    </div>
+
+                                    <hr>
+
+                                    <h3>Gas-Oil Contact (Optional)</h3>
+                                    <div class="form-group">
+                                        <label for="partialHeight">Partial Thickness (h') ft:</label>
+                                        <input type="number" id="partialHeight" step="0.1" placeholder="e.g., 6">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="partialArea">Interpolated Area (A') acres:</label>
+                                        <input type="number" id="partialArea" step="0.1" placeholder="e.g., 0">
+                                    </div>
+
+                                    <div class="info-box">
+                                        <strong>OOIP Formula:</strong><br>
+                                        N = 7758 × BV × φ × (1-Swi) / Boi
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+
+                        <button type="submit" id="computeBtn" class="btn btn-compute">Calculate</button>
+                    </form>
                 </div>
 
-                <hr>
-
-                <h3>Gas-Oil Contact (Optional)</h3>
-                <div class="form-group">
-                    <label for="partialHeight">Partial Thickness (h') ft:</label>
-                    <input type="number" id="partialHeight" step="0.1" placeholder="e.g., 6">
-                </div>
-
-                <div class="form-group">
-                    <label for="partialArea">Interpolated Area (A') acres:</label>
-                    <input type="number" id="partialArea" step="0.1" placeholder="e.g., 0">
-                </div>
-
-                <div class="info-box">
-                    <strong>OOIP Formula:</strong><br>
-                    N = 7758 × BV × φ × (1-Swi) / Boi
-                </div>
-
-                <button id="computeBtn" class="btn btn-compute">COMPUTE</button>
-            </div>
-
-            <!-- Right Panel: Results (Hidden) -->
-            <div class="panel results-panel" style="display: none;">
-                <h2>Results</h2>
-                <div id="results" class="results-container">
-                    <p class="placeholder">Results will appear in popup</p>
+                <!-- Results Section (Split View) -->
+                <div class="results-section" id="resultsSection">
+                    <div class="results-header">
+                        <button type="button" id="backBtn" class="btn btn-secondary">← Back</button>
+                        <h2>📊 Results</h2>
+                    </div>
+                    <div id="results" class="results-container"></div>
                 </div>
             </div>
         </div>
@@ -148,6 +136,50 @@
                 <button class="modal-close">&times;</button>
             </div>
             <div class="modal-body" id="modalResults"></div>
+        </div>
+    </div>
+
+    <!-- Formulas Modal Dialog -->
+    <div id="formulasModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Key Formulas</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="formula-item">
+                    <strong>Bulk Volume (BV) Calculation Methods:</strong>
+                </div>
+                
+                <div class="formula-item">
+                    <strong>1. Trapezoidal Method:</strong><br>
+                    BV = (h/2) × (A₀ + 2A₁ + 2A₂ + ... + 2Aₙ₋₁ + Aₙ)
+                </div>
+                
+                <div class="formula-item">
+                    <strong>2. Pyramid Method:</strong><br>
+                    BV = (h/3) × √(A₁ × A₂) for each interval
+                </div>
+                
+                <div class="formula-item">
+                    <strong>3. Simpson 3/8 Rule:</strong><br>
+                    BV = (3h/8) × (A₀ + 3A₁ + 3A₂ + 2A₃ + ... + Aₙ)
+                </div>
+                
+                <div class="formula-item">
+                    <strong>OOIP (Original Oil In Place):</strong><br>
+                    N = 7758 × BV × φ × (1-Swi) / Boi
+                </div>
+                
+                <div class="formula-item">
+                    <strong>Legend:</strong><br>
+                    h = Contour Interval (ft)<br>
+                    A = Area at contour line (in²)<br>
+                    φ = Porosity (%)<br>
+                    Swi = Initial Water Saturation (%)<br>
+                    Boi = Oil Formation Factor (bbl/STB)
+                </div>
+            </div>
         </div>
     </div>
 

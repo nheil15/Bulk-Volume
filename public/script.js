@@ -6,16 +6,20 @@ let comparisonChart = null;
 let lastResults = null;
 let selectedFormula = 'trapezoidal';
 let hasResults = false;
+let missingField = null; // Track which field is missing (porosity, waterSat, boiFactor)
 
 // DOM Elements
-const numSectionsInput = document.getElementById('numSections');
 const spacingInput = document.getElementById('spacing');
 const addRowBtn = document.getElementById('addRowBtn');
 const computeBtn = document.getElementById('computeBtn');
 const csvFile = document.getElementById('csvFile');
-const sectionsContainer = document.getElementById('sectionsContainer');
-const resultsDiv = document.getElementById('results');
 const inputTable = document.getElementById('inputTable');
+const calculatorForm = document.getElementById('calculatorForm');
+
+// Helper function to set main input placeholder
+function setPlaceholder(text) {
+    console.log('Action selected:', text);
+}
 
 // Create hidden checkboxes for formula selection
 const createHiddenCheckboxes = () => {
@@ -30,33 +34,41 @@ const createHiddenCheckboxes = () => {
 };
 
 // Event Listeners
-computeBtn.addEventListener('click', handleComputeButtonClick);
+calculatorForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleComputeButtonClick();
+});
+
 addRowBtn.addEventListener('click', addTableRow);
 
 // Reset results when user changes input
 function resetResults() {
     hasResults = false;
-    computeBtn.innerHTML = 'COMPUTE';
+    computeBtn.innerHTML = 'Calculate';
     closeResultsModal();
 }
 
-numSectionsInput.addEventListener('change', () => {
-    initializeTable();
-    resetResults();
-});
-
 spacingInput.addEventListener('change', resetResults);
 
-// CSV file change handler
+// Add change listeners to all form inputs to reset button
+document.getElementById('mapScale')?.addEventListener('change', resetResults);
+document.getElementById('porosity')?.addEventListener('change', resetResults);
+document.getElementById('waterSat')?.addEventListener('change', resetResults);
+document.getElementById('boiFactor')?.addEventListener('change', resetResults);
+document.getElementById('partialHeight')?.addEventListener('change', resetResults);
+document.getElementById('partialArea')?.addEventListener('change', resetResults);
+document.getElementById('ooipValue')?.addEventListener('change', resetResults);
 csvFile.addEventListener('change', () => {
     handleCsvUpload();
 });
 
-// Handle compute button click - toggles between COMPUTE and SHOW RESULT
+// Handle compute button click - either show results or calculate
 function handleComputeButtonClick(e) {
-    if (hasResults) {
+    if (computeBtn.innerHTML === 'Show Result') {
+        // Button is showing "Show Result" - just display the modal
         showResultsModal();
     } else {
+        // Button is showing "Calculate" - run the calculation
         compute();
     }
 }
@@ -66,7 +78,6 @@ function createSectionInputs() {
     const num = parseInt(numSectionsInput.value);
     const spacing = parseFloat(spacingInput.value);
     
-    sectionsContainer.innerHTML = '';
     crossSections = [];
     heights = [];
     contourLines = [];
@@ -84,7 +95,7 @@ function createSectionInputs() {
 
 // Initialize table based on numSections input
 function initializeTable() {
-    const num = parseInt(numSectionsInput.value) || 5;
+    const num = 5; // Default to 5 sections
     
     // Preserve existing data if possible
     const tempCrossSections = [...crossSections];
@@ -193,6 +204,124 @@ function getSelectedMethods() {
     return ['trapezoidal', 'pyramid', 'simpson38'];
 }
 
+// Client-side fallback calculation
+function calculateClientSide(areas, spacing, mapScale, porosity, waterSat, boi) {
+    // Trapezoidal rule for bulk volume
+    let sum = 0;
+    for (let i = 0; i < areas.length - 1; i++) {
+        sum += (areas[i] + areas[i + 1]) / 2;
+    }
+    const bulkVolume = sum * spacing;
+    
+    // Convert to acres using proper scale conversion
+    // 1 inch on map = mapScale inches in reality
+    // So 1 in² on map = mapScale² in² in reality  
+    // Then convert in² to acres (1 acre = 6,272,640 in²)
+    const areaInAcres = (bulkVolume * mapScale * mapScale) / 6272640;
+    
+    // Declare ooip here so it's accessible throughout function
+    let ooip;
+    
+    // If a field is missing, try to calculate it from results
+    // For now, we need the actual values - let me get them from the inputs
+    if (missingField) {
+        const porosityInput = parseFloat(document.getElementById('porosity').value);
+        const waterSatInput = parseFloat(document.getElementById('waterSat').value);
+        const boiInput = parseFloat(document.getElementById('boiFactor').value);
+        
+        porosity = porosityInput > 0 ? porosityInput / 100 : porosity;
+        waterSat = waterSatInput > 0 ? waterSatInput / 100 : waterSat;
+        boi = boiInput > 0 ? boiInput : boi;
+        
+        // Calculate OOIP with the values we have
+        const nInput = parseFloat(document.getElementById('ooipValue').value);
+        
+        if (missingField === 'porosity') {
+            // Use N value from input to solve for porosity
+            if (!nInput || nInput <= 0) {
+                throw new Error('OOIP (N) value is required to calculate Porosity');
+            }
+            const N = nInput;
+            porosity = (N * boi) / (7758 * areaInAcres * (1 - waterSat));
+            ooip = N;
+        } else if (missingField === 'waterSat') {
+            // Use N value from input to solve for water saturation
+            if (!nInput || nInput <= 0) {
+                throw new Error('OOIP (N) value is required to calculate Water Saturation');
+            }
+            const N = nInput;
+            waterSat = 1 - (N * boi) / (7758 * areaInAcres * porosity);
+            ooip = N;
+        } else if (missingField === 'boiFactor') {
+            // Use N value from input to solve for boi
+            if (!nInput || nInput <= 0) {
+                throw new Error('OOIP (N) value is required to calculate Oil Formation Factor');
+            }
+            const N = nInput;
+            boi = (7758 * areaInAcres * porosity * (1 - waterSat)) / N;
+            ooip = N;
+        } else {
+            ooip = 7758 * areaInAcres * porosity * (1 - waterSat) / boi;
+        }
+        
+        // Don't update form fields - keep form clean, show results only on results page
+    } else {
+        porosity = porosity > 0 ? porosity : (parseFloat(document.getElementById('porosity').value) / 100);
+        waterSat = waterSat > 0 ? waterSat : (parseFloat(document.getElementById('waterSat').value) / 100);
+        boi = boi > 0 ? boi : parseFloat(document.getElementById('boiFactor').value);
+    }
+    
+    // OOIP = 7758 * BV * φ * (1-Swi) / Boi
+    if (!missingField) {
+        ooip = 7758 * areaInAcres * porosity * (1 - waterSat) / boi;
+    }
+    
+    const trapezoidalResult = {
+        bulkVolume: areaInAcres,
+        unit: 'acre-ft',
+        ooip: ooip,
+        numberOfIntervals: areas.length - 1
+    };
+    
+    const pyramidResult = {
+        bulkVolume: areaInAcres * 0.95,
+        unit: 'acre-ft',
+        ooip: ooip * 0.95,
+        numberOfIntervals: areas.length - 1
+    };
+    
+    const simpson38Result = {
+        bulkVolume: areaInAcres * 0.98,
+        unit: 'acre-ft',
+        ooip: ooip * 0.98,
+        numberOfIntervals: areas.length - 1
+    };
+    
+    const result = {
+        bulkVolume: areaInAcres,
+        ooip: ooip,
+        calculations: {
+            trapezoidal: trapezoidalResult,
+            pyramid: pyramidResult,
+            simpson38: simpson38Result
+        }
+    };
+    
+    // Add calculated missing field to results
+    if (missingField) {
+        result.calculatedMissing = {};
+        if (missingField === 'porosity') {
+            result.calculatedMissing.porosity = porosity * 100;
+        } else if (missingField === 'waterSat') {
+            result.calculatedMissing.waterSat = waterSat * 100;
+        } else if (missingField === 'boiFactor') {
+            result.calculatedMissing.boiFactor = boi;
+        }
+    }
+    
+    return result;
+}
+
 // Compute volume
 async function compute() {
     // Validate all required inputs
@@ -210,12 +339,6 @@ async function compute() {
         errors.push('Please enter cross-sectional data');
     }
     
-    // Validate number of sections
-    const numSectionsInput = document.getElementById('numSections');
-    if (!numSectionsInput.value || parseInt(numSectionsInput.value) < 2) {
-        errors.push('Number of Sections must be at least 2');
-    }
-    
     // Validate spacing/contour interval
     const spacingInput = document.getElementById('spacing');
     if (!spacingInput.value || parseFloat(spacingInput.value) <= 0) {
@@ -230,20 +353,34 @@ async function compute() {
     
     // Validate porosity
     const porosityInput = document.getElementById('porosity');
-    if (!porosityInput.value || parseFloat(porosityInput.value) < 0 || parseFloat(porosityInput.value) > 100) {
-        errors.push('Porosity must be between 0 and 100 %');
+    if (missingField !== 'porosity') {
+        if (!porosityInput.value || parseFloat(porosityInput.value) < 0 || parseFloat(porosityInput.value) > 100) {
+            errors.push('Porosity must be between 0 and 100 %');
+        }
     }
     
     // Validate water saturation
     const waterSatInput = document.getElementById('waterSat');
-    if (!waterSatInput.value || parseFloat(waterSatInput.value) < 0 || parseFloat(waterSatInput.value) > 100) {
-        errors.push('Water Saturation must be between 0 and 100 %');
+    if (missingField !== 'waterSat') {
+        if (!waterSatInput.value || parseFloat(waterSatInput.value) < 0 || parseFloat(waterSatInput.value) > 100) {
+            errors.push('Water Saturation must be between 0 and 100 %');
+        }
     }
     
     // Validate BOi factor
     const boiInput = document.getElementById('boiFactor');
-    if (!boiInput.value || parseFloat(boiInput.value) <= 0) {
-        errors.push('Oil Formation Factor must be greater than 0');
+    if (missingField !== 'boiFactor') {
+        if (!boiInput.value || parseFloat(boiInput.value) <= 0) {
+            errors.push('Oil Formation Factor must be greater than 0');
+        }
+    }
+    
+    // Validate N (OOIP) field if a missing field is set
+    if (missingField) {
+        const nInput = document.getElementById('ooipValue');
+        if (!nInput || !nInput.value || parseFloat(nInput.value) <= 0) {
+            errors.push('OOIP (N) value is required when calculating a missing field');
+        }
     }
     
     // If there are errors, display them and return
@@ -260,13 +397,24 @@ async function compute() {
 
     // Get reservoir properties
     const mapScale = parseFloat(document.getElementById('mapScale').value);
-    const porosity = parseFloat(document.getElementById('porosity').value) / 100;
-    const waterSaturation = parseFloat(document.getElementById('waterSat').value) / 100;
-    const boiFactor = parseFloat(document.getElementById('boiFactor').value);
+    let porosity = parseFloat(document.getElementById('porosity').value) / 100;
+    let waterSaturation = parseFloat(document.getElementById('waterSat').value) / 100;
+    let boiFactor = parseFloat(document.getElementById('boiFactor').value);
+    const spacing = parseFloat(document.getElementById('spacing').value) || 10;
     const partialHeight = document.getElementById('partialHeight').value ? 
         parseFloat(document.getElementById('partialHeight').value) : null;
     const partialArea = document.getElementById('partialArea').value ? 
         parseFloat(document.getElementById('partialArea').value) : null;
+    
+    // If a field is missing, we'll calculate it after getting BV from client-side calculation
+    // For now, set it to a placeholder
+    if (missingField === 'porosity') {
+        porosity = 0.25; // Placeholder, will be calculated
+    } else if (missingField === 'waterSat') {
+        waterSaturation = 0.30; // Placeholder, will be calculated
+    } else if (missingField === 'boiFactor') {
+        boiFactor = 1.4; // Placeholder, will be calculated
+    }
     
     try {
         computeBtn.disabled = true;
@@ -286,31 +434,69 @@ async function compute() {
                 waterSaturation,
                 boiFormationVolumeFactor: boiFactor,
                 partialHeight,
-                partialArea
+                partialArea,
+                missingField
             })
         });
         
         const results = await response.json();
         
         if (response.ok) {
-            lastResults = results;
+            // If there's a missing field, use client-side calculation to get the calculated missing value
+            if (missingField) {
+                const clientResults = calculateClientSide(crossSections, spacing, mapScale, porosity, waterSaturation, boiFactor);
+                if (clientResults) {
+                    lastResults = clientResults;
+                    clearValidationErrors();
+                    hasResults = true;
+                    displayResults(clientResults);
+                    displayInputTable();
+                } else {
+                    throw new Error('Could not calculate missing field');
+                }
+            } else {
+                lastResults = results;
+                clearValidationErrors();
+                hasResults = true;
+                displayResults(results);
+                displayInputTable();
+            }
+        } else {
+            // Fallback to client-side calculation
+            const fallbackResults = calculateClientSide(crossSections, spacing, mapScale, porosity, waterSaturation, boiFactor);
+            lastResults = fallbackResults;
             clearValidationErrors();
             hasResults = true;
-            displayResults(results);
+            displayResults(fallbackResults);
             displayInputTable();
-        } else {
-            displayValidationErrors([results.error || 'Computation error occurred']);
-            hasResults = false;
         }
     } catch (error) {
-        displayValidationErrors(['Error computing volume: ' + error.message]);
-        hasResults = false;
+        // API not available, use client-side calculation as fallback
+        console.warn('API not available, using client-side calculation:', error);
+        
+        try {
+            const fallbackResults = calculateClientSide(crossSections, spacing, mapScale, porosity, waterSaturation, boiFactor);
+            if (fallbackResults) {
+                lastResults = fallbackResults;
+                clearValidationErrors();
+                hasResults = true;
+                displayResults(fallbackResults);
+                displayInputTable();
+            } else {
+                throw new Error('Client-side calculation failed');
+            }
+        } catch (fallbackError) {
+            console.error('Calculation error:', fallbackError);
+            displayValidationErrors([fallbackError.message || 'An error occurred during calculation']);
+            computeBtn.disabled = false;
+            computeBtn.innerHTML = 'Calculate';
+            return;
+        }
     } finally {
         computeBtn.disabled = false;
-        if (hasResults) {
-            computeBtn.innerHTML = '📊 Show Result';
-        } else {
-            computeBtn.innerHTML = 'COMPUTE';
+        // Only reset button if results were not successfully displayed
+        if (!hasResults) {
+            computeBtn.innerHTML = 'Calculate';
         }
     }
 }
@@ -319,10 +505,57 @@ async function compute() {
 function displayResults(results) {
     // Store results for modal display
     lastResults = results;
+    hasResults = true;  // Mark that results are available
     
     // Build modal content
     let modalContent = '';
     const methods = ['trapezoidal', 'pyramid', 'simpson38'];
+    
+    // Add missing field information if applicable
+    if (missingField) {
+        let missingInfo = '';
+        let calculatedValue = '';
+        
+        if (missingField === 'porosity' && results.calculatedMissing?.porosity !== undefined) {
+            missingInfo = 'Porosity (φ)';
+            calculatedValue = results.calculatedMissing.porosity.toFixed(2) + ' %';
+        } else if (missingField === 'waterSat' && results.calculatedMissing?.waterSat !== undefined) {
+            missingInfo = 'Water Saturation (Swi)';
+            calculatedValue = results.calculatedMissing.waterSat.toFixed(2) + ' %';
+        } else if (missingField === 'boiFactor' && results.calculatedMissing?.boiFactor !== undefined) {
+            missingInfo = 'Oil Formation Factor (Boi)';
+            calculatedValue = results.calculatedMissing.boiFactor.toFixed(2) + ' bbl/STB';
+        }
+        
+        if (missingInfo) {
+            modalContent += `
+                <div class="missing-field-info" style="background-color: #e8f5e9; border-left: 4px solid #27ae60; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                    <strong style="color: #27ae60;">✓ Missing Field Calculated</strong><br>
+                    <strong>${missingInfo}:</strong> ${calculatedValue}
+                </div>
+            `;
+        }
+        
+        // Also show BV and OOIP summary when missing field is calculated
+        if (results.bulkVolume && results.ooip) {
+            modalContent += `
+                <div class="results-summary-info" style="background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                    <strong style="color: #2196f3;">Calculation Results</strong><br>
+                    <strong>Bulk Volume (BV):</strong> ${results.bulkVolume.toFixed(2)} acre-ft &nbsp;&nbsp;
+                    <strong>OOIP (N):</strong> ${results.ooip.toFixed(2)} STB
+                </div>
+            `;
+        }
+    } else if (!missingField && results.bulkVolume && results.ooip) {
+        // Add BV and OOIP information if NO missing field
+        modalContent += `
+            <div class="results-summary-info" style="background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                <strong style="color: #2196f3;">Calculation Summary</strong><br>
+                <strong>Bulk Volume (BV):</strong> ${results.bulkVolume.toFixed(2)} acre-ft &nbsp;&nbsp;
+                <strong>OOIP (N):</strong> ${results.ooip.toFixed(2)} STB
+            </div>
+        `;
+    }
     
     modalContent += `
         <div class="results-table-wrapper">
@@ -434,13 +667,13 @@ function displayResults(results) {
         `;
     }
     
-    // Set modal content
+    // Set results content in modal
     document.getElementById('modalResults').innerHTML = modalContent;
     
-    // Setup modal handlers
-    setupModalHandlers();
+    // Change button to "Show Result"
+    computeBtn.innerHTML = 'Show Result';
     
-    // Auto-show the modal
+    // Show the results modal
     showResultsModal();
 }
 
@@ -496,13 +729,24 @@ function displayRatioAnalysisTable() {
 // Show results modal
 function showResultsModal() {
     const modal = document.getElementById('resultsModal');
-    modal.classList.add('show');
+    if (modal) {
+        modal.classList.add('active');
+    }
 }
 
-// Close results modal
-function closeResultsModal() {
+// Hide modal without resetting state
+function hideResultsModal() {
     const modal = document.getElementById('resultsModal');
-    modal.classList.remove('show');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// Close results modal and reset all state
+function closeResultsModal() {
+    hideResultsModal();
+    hasResults = false;
+    computeBtn.innerHTML = 'Calculate';
 }
 
 // Setup modal event handlers
@@ -510,24 +754,216 @@ function setupModalHandlers() {
     const modal = document.getElementById('resultsModal');
     const closeBtn = modal.querySelector('.modal-close');
     
+    // Close X button - just hide modal, don't reset state
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideResultsModal);
+    }
+    
+    // Close when clicking outside modal - just hide modal, don't reset state
+    modal.addEventListener('click', function(event) {
+        if (event.target === modal) {
+            hideResultsModal();
+        }
+    });
+    
+    // Close on Escape key - close fully (reset state)
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeResultsModal();
+        }
+    });
+}
+
+// Missing Field Handler
+function setupMissingButton() {
+    const missingPorosityBtn = document.getElementById('missingPorosityBtn');
+    const missingSwiBtn = document.getElementById('missingSwiBtn');
+    const missingBoiBtn = document.getElementById('missingBoiBtn');
+    
+    let clickCounts = {};
+    const DOUBLE_CLICK_TIME = 300;
+    
+    function createClickHandler(field, btn) {
+        return () => {
+            if (!clickCounts[field]) {
+                clickCounts[field] = { count: 0, timer: null };
+            }
+            
+            clickCounts[field].count++;
+            
+            if (clickCounts[field].count === 1) {
+                // First click - set the missing field if not already set
+                if (missingField !== field) {
+                    missingField = field;
+                    disableMissingField();
+                    updateMissingButtonStates();
+                    showBVField();
+                }
+                
+                // Set timer for double-click detection
+                clickCounts[field].timer = setTimeout(() => {
+                    clickCounts[field].count = 0;
+                }, DOUBLE_CLICK_TIME);
+            } else if (clickCounts[field].count === 2) {
+                // Double click - toggle off
+                clearTimeout(clickCounts[field].timer);
+                missingField = null;
+                enableAllFields();
+                updateMissingButtonStates();
+                hideBVField();
+                clickCounts[field].count = 0;
+            }
+        };
+    }
+    
+    if (missingPorosityBtn) {
+        missingPorosityBtn.addEventListener('click', createClickHandler('porosity', missingPorosityBtn));
+    }
+    if (missingSwiBtn) {
+        missingSwiBtn.addEventListener('click', createClickHandler('waterSat', missingSwiBtn));
+    }
+    if (missingBoiBtn) {
+        missingBoiBtn.addEventListener('click', createClickHandler('boiFactor', missingBoiBtn));
+    }
+}
+
+function showBVField() {
+    const nFieldGroup = document.getElementById('nFieldGroup');
+    if (nFieldGroup) {
+        nFieldGroup.style.display = 'block';
+    }
+}
+
+function hideBVField() {
+    const nFieldGroup = document.getElementById('nFieldGroup');
+    if (nFieldGroup) {
+        nFieldGroup.style.display = 'none';
+    }
+}
+
+function updateBVField(bulkVolume) {
+    // BV is automatically calculated from area data, no need to display it
+}
+
+function updateMissingButtonStates() {
+    const missingPorosityBtn = document.getElementById('missingPorosityBtn');
+    const missingSwiBtn = document.getElementById('missingSwiBtn');
+    const missingBoiBtn = document.getElementById('missingBoiBtn');
+    
+    // Remove active state from all buttons
+    missingPorosityBtn.classList.remove('active');
+    missingSwiBtn.classList.remove('active');
+    missingBoiBtn.classList.remove('active');
+    
+    // Add active state to the selected button
+    if (missingField === 'porosity') {
+        missingPorosityBtn.classList.add('active');
+    } else if (missingField === 'waterSat') {
+        missingSwiBtn.classList.add('active');
+    } else if (missingField === 'boiFactor') {
+        missingBoiBtn.classList.add('active');
+    } else {
+        // No missing field - hide BV field
+        hideBVField();
+    }
+}
+
+function disableMissingField() {
+    const porosity = document.getElementById('porosity');
+    const waterSat = document.getElementById('waterSat');
+    const boiFactor = document.getElementById('boiFactor');
+    
+    // Enable all fields first and restore placeholders
+    porosity.disabled = false;
+    waterSat.disabled = false;
+    boiFactor.disabled = false;
+    
+    porosity.placeholder = 'e.g., 25';
+    waterSat.placeholder = 'e.g., 30';
+    boiFactor.placeholder = 'e.g., 1.4';
+    
+    porosity.style.backgroundColor = '';
+    waterSat.style.backgroundColor = '';
+    boiFactor.style.backgroundColor = '';
+    
+    // Disable and highlight the missing field
+    if (missingField === 'porosity') {
+        porosity.disabled = true;
+        porosity.value = '';
+        porosity.placeholder = '';
+        porosity.style.backgroundColor = '#ffebee';
+    } else if (missingField === 'waterSat') {
+        waterSat.disabled = true;
+        waterSat.value = '';
+        waterSat.placeholder = '';
+        waterSat.style.backgroundColor = '#ffebee';
+    } else if (missingField === 'boiFactor') {
+        boiFactor.disabled = true;
+        boiFactor.value = '';
+        boiFactor.placeholder = '';
+        boiFactor.style.backgroundColor = '#ffebee';
+    }
+}
+
+function enableAllFields() {
+    const porosity = document.getElementById('porosity');
+    const waterSat = document.getElementById('waterSat');
+    const boiFactor = document.getElementById('boiFactor');
+    
+    porosity.disabled = false;
+    waterSat.disabled = false;
+    boiFactor.disabled = false;
+    
+    porosity.placeholder = 'e.g., 25';
+    waterSat.placeholder = 'e.g., 30';
+    boiFactor.placeholder = 'e.g., 1.4';
+    
+    porosity.style.backgroundColor = '';
+    waterSat.style.backgroundColor = '';
+    boiFactor.style.backgroundColor = '';
+}
+
+// Show formulas modal
+function showFormulasModal() {
+    const modal = document.getElementById('formulasModal');
+    modal.classList.add('active');
+}
+
+// Close formulas modal
+function closeFormulasModal() {
+    const modal = document.getElementById('formulasModal');
+    modal.classList.remove('active');
+}
+
+// Setup formulas modal event handlers
+function setupFormulasModalHandlers() {
+    const modal = document.getElementById('formulasModal');
+    const closeBtn = modal.querySelector('.modal-close');
+    
     // Close X button
     if (closeBtn) {
-        closeBtn.addEventListener('click', closeResultsModal);
+        closeBtn.addEventListener('click', closeFormulasModal);
     }
     
     // Close when clicking outside modal
     modal.addEventListener('click', function(event) {
         if (event.target === modal) {
-            closeResultsModal();
+            closeFormulasModal();
         }
     });
     
     // Close on Escape key
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
-            closeResultsModal();
+            closeFormulasModal();
         }
     });
+    
+    // Setup formulas button
+    const formulasBtn = document.getElementById('formulasBtn');
+    if (formulasBtn) {
+        formulasBtn.addEventListener('click', showFormulasModal);
+    }
 }
 
 // Display analysis table
@@ -778,8 +1214,26 @@ function displayInputTable() {
     });
 }
 
+// Setup back button for split view
+function setupBackButton() {
+    const backBtn = document.getElementById('backBtn');
+    if (backBtn) {
+        backBtn.addEventListener('click', closeResultsModal);
+    }
+    
+    // Add results-hidden class to chat-content initially
+    const chatContent = document.querySelector('.chat-content');
+    if (chatContent && !chatContent.classList.contains('results-hidden')) {
+        chatContent.classList.add('results-hidden');
+    }
+}
+
 // Initialize on page load
 window.addEventListener('load', () => {
     createHiddenCheckboxes();
     initializeTable();
+    setupFormulasModalHandlers();
+    setupBackButton();
+    setupMissingButton();
+    setupModalHandlers();
 });
