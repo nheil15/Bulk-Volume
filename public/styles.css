@@ -49,9 +49,11 @@ body {
 
 .missing-buttons-group {
     position: absolute;
+    top: 8px;
     left: 15px;
     display: flex;
     gap: 6px;
+    align-items: center;
 }
 
 .btn-missing-field {
@@ -105,6 +107,7 @@ body {
     width: 100%;
     display: flex;
     flex-direction: column;
+    align-items: center;
     overflow-y: auto;
     overflow-x: hidden;
     flex: 0 0 100%;
@@ -157,6 +160,8 @@ body {
 /* Calculator form */
 .calculator-form {
     width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -378,25 +383,24 @@ body {
     flex-direction: column;
     gap: 8px;
     margin-top: 10px;
+    align-items: center;
 }
 
 .buttons-row-1 {
     display: flex;
     gap: 8px;
-    width: 100%;
 }
 
 .buttons-row-1 .btn {
-    flex: 1;
+    flex: none;
 }
 
 .buttons-row-2 {
     display: flex;
-    width: 100%;
 }
 
 .buttons-row-2 .btn {
-    width: 100%;
+    width: auto;
 }
 
 /* Buttons */
@@ -469,23 +473,53 @@ body {
 .btn-compute {
     width: 100%;
     padding: 10px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
     color: white;
     border: none;
     font-size: 0.9em;
     font-weight: 600;
     margin-top: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
 }
 
-.btn-compute:hover {
+.btn-compute:hover:not(:disabled) {
+    background: linear-gradient(135deg, #4a5258 0%, #3d474c 100%);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+}
+
+.btn-compute:disabled {
+    background: linear-gradient(135deg, #c5ccc3 0%, #a8afd5 100%);
+    color: #666;
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) inset;
+    transform: none;
+}
+
+.btn-compute:disabled::after {
+    content: 'Fill reservoir properties';
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    animation: tooltipFade 0.3s ease forwards;
 }
 
 /* Info box */
 .info-box {
     background: #f0f7ff;
-    border-left: 4px solid #667eea;
+    border-left: 4px solid #6c757d;
     padding: 12px;
     border-radius: 4px;
     font-size: 0.9em;
@@ -664,7 +698,7 @@ body {
 
 .results-table thead,
 .analysis-table thead {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
     color: white;
     font-weight: 600;
 }
@@ -675,7 +709,7 @@ body {
     text-align: left;
     font-size: 0.9em;
     white-space: nowrap;
-    border-bottom: 2px solid #667eea;
+    border-bottom: 2px solid #6c757d;
 }
 
 .results-table tbody tr,
@@ -727,6 +761,15 @@ body {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@keyframes tooltipFade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
     }
 }
 

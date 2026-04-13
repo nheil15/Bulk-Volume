@@ -16,6 +16,12 @@ const csvFile = document.getElementById('csvFile');
 const inputTable = document.getElementById('inputTable');
 const calculatorForm = document.getElementById('calculatorForm');
 
+// Reservoir property inputs
+const mapScaleInput = document.getElementById('mapScale');
+const porosityInput = document.getElementById('porosity');
+const waterSatInput = document.getElementById('waterSat');
+const boiFactorInput = document.getElementById('boiFactor');
+
 // Helper function to set main input placeholder
 function setPlaceholder(text) {
     console.log('Action selected:', text);
@@ -32,6 +38,24 @@ const createHiddenCheckboxes = () => {
         document.body.insertAdjacentHTML('afterbegin', checkboxes);
     }
 };
+
+// Check if all reservoir property fields are empty
+function areAllReservoirFieldsEmpty() {
+    const mapScaleValue = mapScaleInput?.value?.trim() || '';
+    const porosityValue = porosityInput?.value?.trim() || '';
+    const waterSatValue = waterSatInput?.value?.trim() || '';
+    const boiFactorValue = boiFactorInput?.value?.trim() || '';
+    
+    return !mapScaleValue && !porosityValue && !waterSatValue && !boiFactorValue;
+}
+
+// Update the compute button disabled state
+function updateComputeButtonState() {
+    const isDisabled = areAllReservoirFieldsEmpty();
+    if (computeBtn) {
+        computeBtn.disabled = isDisabled;
+    }
+}
 
 // Event Listeners
 calculatorForm.addEventListener('submit', (e) => {
@@ -50,10 +74,27 @@ function resetResults() {
 
 spacingInput.addEventListener('change', resetResults);
 
-// Add change listeners to all form inputs to reset button
-document.getElementById('mapScale')?.addEventListener('change', resetResults);
-document.getElementById('porosity')?.addEventListener('change', resetResults);
-document.getElementById('waterSat')?.addEventListener('change', resetResults);
+// Add change listeners to all form inputs to reset button and update state
+document.getElementById('mapScale')?.addEventListener('change', () => {
+    resetResults();
+    updateComputeButtonState();
+});
+document.getElementById('porosity')?.addEventListener('change', () => {
+    resetResults();
+    updateComputeButtonState();
+});
+document.getElementById('waterSat')?.addEventListener('change', () => {
+    resetResults();
+    updateComputeButtonState();
+});
+document.getElementById('boiFactor')?.addEventListener('change', () => {
+    resetResults();
+    updateComputeButtonState();
+});
+document.getElementById('mapScale')?.addEventListener('input', updateComputeButtonState);
+document.getElementById('porosity')?.addEventListener('input', updateComputeButtonState);
+document.getElementById('waterSat')?.addEventListener('input', updateComputeButtonState);
+document.getElementById('boiFactor')?.addEventListener('input', updateComputeButtonState);
 document.getElementById('boiFactor')?.addEventListener('change', resetResults);
 document.getElementById('partialHeight')?.addEventListener('change', resetResults);
 document.getElementById('partialArea')?.addEventListener('change', resetResults);
@@ -530,7 +571,7 @@ function displayResults(results) {
         if (missingInfo) {
             modalContent += `
                 <div class="missing-field-info" style="background-color: #e8f5e9; border-left: 4px solid #27ae60; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
-                    <strong style="color: #27ae60;">✓ Missing Field Calculated</strong><br>
+                    <strong style="color: #27ae60;">Missing Field Calculated</strong><br>
                     <strong>${missingInfo}:</strong> ${calculatedValue}
                 </div>
             `;
@@ -607,8 +648,8 @@ function displayResults(results) {
                     <tr class="condition-row">
                         <td colspan="4">
                             <strong>Simpson 3/8 Conditions:</strong>
-                            Odd sections: ${calc.conditions.hasOddSections ? '✓' : '✗'} | 
-                            Uniform thickness: ${calc.conditions.hasUniformThickness ? '✓' : '✗'}
+                            Odd sections: ${calc.conditions.hasOddSections ? 'Yes' : 'No'} | 
+                            Uniform thickness: ${calc.conditions.hasUniformThickness ? 'Yes' : 'No'}
                         </td>
                     </tr>
                 `;
@@ -654,7 +695,7 @@ function displayResults(results) {
                 <tr>
                     <td>${cl1.toFixed(0)}-${cl2.toFixed(0)}</td>
                     <td>${ratio}</td>
-                    <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes ✓</span>' : '<span style="color: #e74c3c; font-weight: bold;">No ✗</span>'}</td>
+                    <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes</span>' : '<span style="color: #e74c3c; font-weight: bold;">No</span>'}</td>
                     <td>${meetsCondition ? '<span style="color: #27ae60;">Use Pyramidal</span>' : '<span style="color: #e74c3c;">Use Trapezoidal</span>'}</td>
                 </tr>
             `;
@@ -711,7 +752,7 @@ function displayRatioAnalysisTable() {
             <tr>
                 <td>${cl1.toFixed(0)}-${cl2.toFixed(0)}</td>
                 <td>${ratio}</td>
-                <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes ✓</span>' : '<span style="color: #e74c3c; font-weight: bold;">No ✗</span>'}</td>
+                <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes</span>' : '<span style="color: #e74c3c; font-weight: bold;">No</span>'}</td>
                 <td>${meetsCondition ? '<span style="color: #27ae60;">Use Pyramidal</span>' : '<span style="color: #e74c3c;">Use Trapezoidal</span>'}</td>
             </tr>
         `;
@@ -1000,7 +1041,7 @@ function displayAnalysisTable() {
             <tr>
                 <td>${cl1.toFixed(0)} - ${cl2.toFixed(0)}</td>
                 <td>${ratio.toFixed(2)}</td>
-                <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes ✓</span>' : '<span style="color: #e74c3c; font-weight: bold;">No ✗</span>'}</td>
+                <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes</span>' : '<span style="color: #e74c3c; font-weight: bold;">No</span>'}</td>
                 <td>${meetsCondition ? 'Use Pyramid' : 'Use Trapezoidal'}</td>
             </tr>
         `;
@@ -1236,4 +1277,5 @@ window.addEventListener('load', () => {
     setupBackButton();
     setupMissingButton();
     setupModalHandlers();
+    updateComputeButtonState(); // Initialize button state
 });
