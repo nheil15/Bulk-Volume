@@ -12,7 +12,6 @@ const numSectionsInput = document.getElementById('numSections');
 const spacingInput = document.getElementById('spacing');
 const addRowBtn = document.getElementById('addRowBtn');
 const computeBtn = document.getElementById('computeBtn');
-const loadSampleBtn = document.getElementById('loadSample');
 const csvFile = document.getElementById('csvFile');
 const sectionsContainer = document.getElementById('sectionsContainer');
 const resultsDiv = document.getElementById('results');
@@ -32,7 +31,6 @@ const createHiddenCheckboxes = () => {
 
 // Event Listeners
 computeBtn.addEventListener('click', handleComputeButtonClick);
-loadSampleBtn.addEventListener('click', loadSampleData);
 addRowBtn.addEventListener('click', addTableRow);
 
 // Reset results when user changes input
@@ -139,24 +137,7 @@ function deleteTableRow(index) {
     displayInputTable();
     resetResults();
 }
-function loadSampleData() {
-    crossSections = [250, 200, 140, 98, 76, 40, 26, 12, 5, 0];
-    contourLines = [0, 10, 20, 30, 40, 50, 60, 70, 80, 86];
-    heights = [10, 10, 10, 10, 10, 10, 10, 10, 10];
-    
-    numSectionsInput.value = crossSections.length;
-    spacingInput.value = 10;
-    
-    // Set reservoir properties from PDF sample
-    document.getElementById('mapScale').value = 15000;
-    document.getElementById('porosity').value = 25;
-    document.getElementById('waterSat').value = 30;
-    document.getElementById('boiFactor').value = 1.4;
-    
-    displayInputTable();
-    resetResults();
-    alert('Sample data loaded from PDF example');
-}
+
 
 // Handle CSV upload
 function handleCsvUpload() {
