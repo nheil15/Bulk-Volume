@@ -921,6 +921,227 @@ body {
     /* Used by action buttons */
 }
 
+/* Mobile Phone Responsive (Below 600px - Small phones) */
+@media (max-width: 600px) {
+    body {
+        height: auto;
+        overflow: auto;
+        overflow-x: hidden;
+    }
+
+    .chat-container {
+        height: auto;
+        min-height: 100vh;
+        overflow-x: hidden;
+    }
+
+    .chat-header {
+        margin-top: 8px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    .chat-header h2 {
+        font-size: 1.3em;
+    }
+
+    .subtitle-text {
+        font-size: 0.9em;
+        width: 100%;
+        order: 3;
+        margin-top: 8px;
+    }
+
+    .missing-buttons-group {
+        position: relative;
+        top: auto;
+        gap: 4px;
+        margin-bottom: 8px;
+        justify-content: flex-start;
+    }
+
+    .btn-missing-field {
+        font-size: 0.7em;
+        padding: 5px 8px;
+        min-height: 36px;
+    }
+
+    .calculator-form {
+        max-width: 100%;
+        padding: 0 8px;
+    }
+
+    .panel-summary {
+        font-size: 0.95em;
+        padding: 10px;
+    }
+
+    .panel-content {
+        padding: 10px;
+    }
+
+    .input-data-layout {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 8px !important;
+    }
+
+    .form-group {
+        margin-bottom: 10px;
+    }
+
+    .form-group label {
+        font-size: 0.9em;
+    }
+
+    .form-group input,
+    .form-group select {
+        font-size: 1em;
+        padding: 8px;
+        min-height: 40px;
+    }
+
+    .data-buttons {
+        gap: 6px;
+    }
+
+    .buttons-row-1,
+    .buttons-row-2 {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .btn {
+        padding: 10px 12px;
+        font-size: 0.9em;
+        min-height: 40px;
+        min-width: 100px;
+    }
+
+    .btn-secondary {
+        flex: 1;
+        min-width: auto;
+    }
+
+    .btn-compute {
+        width: 100%;
+        padding: 12px;
+        font-size: 1em;
+        min-height: 44px;
+        margin-top: 10px;
+    }
+
+    .data-table-wrapper {
+        margin-top: 8px;
+        overflow-x: auto;
+    }
+
+    .data-table {
+        font-size: 0.8em;
+        min-width: 100%;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 6px 4px;
+        white-space: nowrap;
+    }
+
+    .input-summary-column {
+        width: 100%;
+    }
+
+    .chat-content {
+        flex-direction: column;
+    }
+
+    .input-section {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .input-section.with-results {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #e5e5e5;
+        max-height: none;
+    }
+
+    .results-section {
+        width: 100%;
+        border-left: none;
+    }
+
+    .results-header {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .results-header h2 {
+        font-size: 1.1em;
+    }
+
+    .modal-content {
+        max-width: 95vw;
+        max-height: 85vh;
+        width: 90%;
+    }
+
+    .modal {
+        padding: 10px;
+    }
+
+    .modal-header h2 {
+        font-size: 1.1em;
+    }
+
+    .modal-body {
+        font-size: 0.9em;
+    }
+}
+
+/* Extra Small Phones (Below 360px) */
+@media (max-width: 360px) {
+    .chat-header h2 {
+        font-size: 1.1em;
+    }
+
+    .missing-buttons-group {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .btn-missing-field {
+        font-size: 0.65em;
+        padding: 4px 6px;
+        flex: 1;
+        min-width: 70px;
+    }
+
+    .calculator-form {
+        padding: 0 6px;
+    }
+
+    .btn {
+        font-size: 0.85em;
+        padding: 8px 10px;
+    }
+
+    .data-table {
+        font-size: 0.8em;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 4px;
+    }
+
+    .modal-content {
+        max-width: 98vw;
+        width: 95%;
+    }
+}
+
 ::-webkit-scrollbar-thumb {
     background: #667eea;
     border-radius: 10px;
