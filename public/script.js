@@ -6,21 +6,32 @@ let comparisonChart = null;
 let lastResults = null;
 let selectedFormula = 'trapezoidal';
 let hasResults = false;
-let missingField = null; // Track which field is missing (porosity, waterSat, boiFactor)
 
-// DOM Elements
-const spacingInput = document.getElementById('spacing');
-const addRowBtn = document.getElementById('addRowBtn');
-const computeBtn = document.getElementById('computeBtn');
-const csvFile = document.getElementById('csvFile');
-const inputTable = document.getElementById('inputTable');
-const calculatorForm = document.getElementById('calculatorForm');
+// DOM Elements - will be initialized after page loads
+let spacingInput;
+let addRowBtn;
+let computeBtn;
+let csvFile;
+let inputTable;
+let calculatorForm;
+let mapScaleInput;
+let porosityInput;
+let waterSatInput;
+let boiFactorInput;
 
-// Reservoir property inputs
-const mapScaleInput = document.getElementById('mapScale');
-const porosityInput = document.getElementById('porosity');
-const waterSatInput = document.getElementById('waterSat');
-const boiFactorInput = document.getElementById('boiFactor');
+// Initialize DOM elements after page load
+function initializeDOMElements() {
+    spacingInput = document.getElementById('spacing');
+    addRowBtn = document.getElementById('addRowBtn');
+    computeBtn = document.getElementById('computeBtn');
+    csvFile = document.getElementById('csvFile');
+    inputTable = document.getElementById('inputTable');
+    calculatorForm = document.getElementById('calculatorForm');
+    mapScaleInput = document.getElementById('mapScale');
+    porosityInput = document.getElementById('porosity');
+    waterSatInput = document.getElementById('waterSat');
+    boiFactorInput = document.getElementById('boiFactor');
+}
 
 // Helper function to set main input placeholder
 function setPlaceholder(text) {
@@ -57,51 +68,12 @@ function updateComputeButtonState() {
     }
 }
 
-// Event Listeners
-calculatorForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    handleComputeButtonClick();
-});
-
-addRowBtn.addEventListener('click', addTableRow);
-
 // Reset results when user changes input
 function resetResults() {
     hasResults = false;
     computeBtn.innerHTML = 'Calculate';
     closeResultsModal();
 }
-
-spacingInput.addEventListener('change', resetResults);
-
-// Add change listeners to all form inputs to reset button and update state
-document.getElementById('mapScale')?.addEventListener('change', () => {
-    resetResults();
-    updateComputeButtonState();
-});
-document.getElementById('porosity')?.addEventListener('change', () => {
-    resetResults();
-    updateComputeButtonState();
-});
-document.getElementById('waterSat')?.addEventListener('change', () => {
-    resetResults();
-    updateComputeButtonState();
-});
-document.getElementById('boiFactor')?.addEventListener('change', () => {
-    resetResults();
-    updateComputeButtonState();
-});
-document.getElementById('mapScale')?.addEventListener('input', updateComputeButtonState);
-document.getElementById('porosity')?.addEventListener('input', updateComputeButtonState);
-document.getElementById('waterSat')?.addEventListener('input', updateComputeButtonState);
-document.getElementById('boiFactor')?.addEventListener('input', updateComputeButtonState);
-document.getElementById('boiFactor')?.addEventListener('change', resetResults);
-document.getElementById('partialHeight')?.addEventListener('change', resetResults);
-document.getElementById('partialArea')?.addEventListener('change', resetResults);
-document.getElementById('ooipValue')?.addEventListener('change', resetResults);
-csvFile.addEventListener('change', () => {
-    handleCsvUpload();
-});
 
 // Handle compute button click - either show results or calculate
 function handleComputeButtonClick(e) {
@@ -124,7 +96,7 @@ function createSectionInputs() {
     contourLines = [];
     
     for (let i = 0; i < num; i++) {
-        crossSections[i] = 10 * (i + 1);
+        crossSections[i] = ''; // Empty by default, user must enter
         contourLines[i] = i * spacing;
         if (i < num - 1) {
             heights[i] = spacing;
@@ -138,19 +110,18 @@ function createSectionInputs() {
 function initializeTable() {
     const num = 5; // Default to 5 sections
     
-    // Preserve existing data if possible
-    const tempCrossSections = [...crossSections];
-    const tempContourLines = [...contourLines];
-    
     crossSections = [];
     contourLines = [];
     heights = [];
     
+    // Get spacing value safely with fallback
+    const spacing = spacingInput ? parseFloat(spacingInput.value) || 10 : 10;
+    
     for (let i = 0; i < num; i++) {
-        crossSections[i] = tempCrossSections[i] || (10 * (i + 1));
-        contourLines[i] = tempContourLines[i] || (i * (parseFloat(spacingInput.value) || 10));
+        crossSections[i] = ''; // Empty by default, user must enter
+        contourLines[i] = i * spacing;
         if (i < num - 1) {
-            heights[i] = parseFloat(spacingInput.value) || 10;
+            heights[i] = spacing;
         }
     }
     
@@ -159,10 +130,19 @@ function initializeTable() {
 
 // Add a new row to the table
 function addTableRow() {
+    // First, save any current input values from the DOM
+    document.querySelectorAll('.area-input').forEach(input => {
+        const index = parseInt(input.dataset.index);
+        const value = input.value.trim();
+        if (value) {
+            crossSections[index] = parseFloat(value);
+        }
+    });
+    
     const newIndex = crossSections.length;
     const spacing = parseFloat(spacingInput.value) || 10;
     
-    crossSections.push(10 * (newIndex + 1));
+    crossSections.push(''); // Add empty row for user to fill in
     contourLines.push(newIndex * spacing);
     if (newIndex < crossSections.length - 1) {
         heights[newIndex] = spacing;
@@ -182,9 +162,6 @@ function deleteTableRow(index) {
     for (let i = 0; i < crossSections.length - 1; i++) {
         heights[i] = parseFloat(spacingInput.value) || 10;
     }
-    
-    // Update numSections input
-    numSectionsInput.value = crossSections.length;
     
     displayInputTable();
     resetResults();
@@ -242,123 +219,100 @@ function handleCsvUpload() {
 
 // Get selected methods
 function getSelectedMethods() {
-    return ['trapezoidal', 'pyramid', 'simpson38'];
+    return ['trapezoidal'];
 }
 
-// Client-side fallback calculation
-function calculateClientSide(areas, spacing, mapScale, porosity, waterSat, boi) {
-    // Trapezoidal rule for bulk volume
-    let sum = 0;
-    for (let i = 0; i < areas.length - 1; i++) {
-        sum += (areas[i] + areas[i + 1]) / 2;
-    }
-    const bulkVolume = sum * spacing;
-    
-    // Convert to acres using proper scale conversion
-    // 1 inch on map = mapScale inches in reality
-    // So 1 in² on map = mapScale² in² in reality  
-    // Then convert in² to acres (1 acre = 6,272,640 in²)
-    const areaInAcres = (bulkVolume * mapScale * mapScale) / 6272640;
-    
-    // Declare ooip here so it's accessible throughout function
-    let ooip;
-    
-    // If a field is missing, try to calculate it from results
-    // For now, we need the actual values - let me get them from the inputs
-    if (missingField) {
-        const porosityInput = parseFloat(document.getElementById('porosity').value);
-        const waterSatInput = parseFloat(document.getElementById('waterSat').value);
-        const boiInput = parseFloat(document.getElementById('boiFactor').value);
-        
-        porosity = porosityInput > 0 ? porosityInput / 100 : porosity;
-        waterSat = waterSatInput > 0 ? waterSatInput / 100 : waterSat;
-        boi = boiInput > 0 ? boiInput : boi;
-        
-        // Calculate OOIP with the values we have
-        const nInput = parseFloat(document.getElementById('ooipValue').value);
-        
-        if (missingField === 'porosity') {
-            // Use N value from input to solve for porosity
-            if (!nInput || nInput <= 0) {
-                throw new Error('OOIP (N) value is required to calculate Porosity');
+// Client-side fallback calculation with GOC support
+function calculateClientSide(areas, spacing, mapScale, porosity, waterSat, boi, bgi, gocLevel, hGOC, hBottom) {
+    // Find GOC index if GOC is specified
+    let gocIndex = -1;
+    if (gocLevel !== null && gocLevel !== undefined) {
+        for (let i = 0; i < contourLines.length; i++) {
+            if (contourLines[i] == gocLevel) {
+                gocIndex = i;
+                break;
             }
-            const N = nInput;
-            porosity = (N * boi) / (7758 * areaInAcres * (1 - waterSat));
-            ooip = N;
-        } else if (missingField === 'waterSat') {
-            // Use N value from input to solve for water saturation
-            if (!nInput || nInput <= 0) {
-                throw new Error('OOIP (N) value is required to calculate Water Saturation');
-            }
-            const N = nInput;
-            waterSat = 1 - (N * boi) / (7758 * areaInAcres * porosity);
-            ooip = N;
-        } else if (missingField === 'boiFactor') {
-            // Use N value from input to solve for boi
-            if (!nInput || nInput <= 0) {
-                throw new Error('OOIP (N) value is required to calculate Oil Formation Factor');
-            }
-            const N = nInput;
-            boi = (7758 * areaInAcres * porosity * (1 - waterSat)) / N;
-            ooip = N;
-        } else {
-            ooip = 7758 * areaInAcres * porosity * (1 - waterSat) / boi;
         }
+    }
+    
+    // Calculate oil section BV (from top to GOC)
+    let oilBV = 0;
+    let gasBV = 0;
+    let oilAcres = 0;
+    let gasAcres = 0;
+    
+    if (gocIndex >= 0) {
+        // Case with GOC: calculate oil section from 0 to GOC
+        // Using hGOC as partial thickness at GOC
+        let sum = 0;
+        for (let i = 0; i < gocIndex; i++) {
+            sum += (areas[i] + areas[i + 1]) / 2;
+        }
+        // Add GOC section with hGOC
+        sum += (areas[gocIndex] * hGOC / spacing);
+        oilBV = sum * spacing;
         
-        // Don't update form fields - keep form clean, show results only on results page
+        // Calculate gas section BV (from GOC to bottom)
+        // Using hBottom as partial thickness at bottom
+        let gasSum = 0;
+        for (let i = gocIndex + 1; i < areas.length - 1; i++) {
+            gasSum += (areas[i] + areas[i + 1]) / 2;
+        }
+        // Add bottom section with hBottom
+        gasSum += (areas[areas.length - 1] * hBottom / spacing);
+        gasBV = gasSum * spacing;
     } else {
-        porosity = porosity > 0 ? porosity : (parseFloat(document.getElementById('porosity').value) / 100);
-        waterSat = waterSat > 0 ? waterSat : (parseFloat(document.getElementById('waterSat').value) / 100);
-        boi = boi > 0 ? boi : parseFloat(document.getElementById('boiFactor').value);
+        // No GOC: single calculation for oil with hBottom as full thickness
+        let sum = 0;
+        for (let i = 0; i < areas.length - 1; i++) {
+            sum += (areas[i] + areas[i + 1]) / 2;
+        }
+        // Add last section with hBottom
+        sum += (areas[areas.length - 1] * hBottom / spacing);
+        oilBV = sum * spacing;
     }
     
-    // OOIP = 7758 * BV * φ * (1-Swi) / Boi
-    if (!missingField) {
-        ooip = 7758 * areaInAcres * porosity * (1 - waterSat) / boi;
+    // Convert BV (in²-ft) to acres using map scale
+    // BV in acres = (BV in in²-ft) × (mapScale²) / 6,272,640
+    oilAcres = (oilBV * mapScale * mapScale) / 6272640;
+    gasAcres = (gasBV * mapScale * mapScale) / 6272640;
+    
+    // Calculate OOIP (Oil)
+    let ooip = 'N/A';
+    if (boi && boi > 0) {
+        // N = 7758 × BV_oil × φ × (1-Swi) / Boi
+        // Result in STB, then convert to MMSTB by dividing by 1,000,000
+        const ooipSTB = 7758 * oilAcres * porosity * (1 - waterSat) / boi;
+        ooip = ooipSTB / 1000000; // Convert to MMSTB
     }
     
-    const trapezoidalResult = {
-        bulkVolume: areaInAcres,
-        unit: 'acre-ft',
-        ooip: ooip,
-        numberOfIntervals: areas.length - 1
-    };
-    
-    const pyramidResult = {
-        bulkVolume: areaInAcres * 0.95,
-        unit: 'acre-ft',
-        ooip: ooip * 0.95,
-        numberOfIntervals: areas.length - 1
-    };
-    
-    const simpson38Result = {
-        bulkVolume: areaInAcres * 0.98,
-        unit: 'acre-ft',
-        ooip: ooip * 0.98,
-        numberOfIntervals: areas.length - 1
-    };
+    // Calculate OGIP (Gas)
+    let ogip = 'N/A';
+    if (bgi && bgi > 0 && gasAcres > 0) {
+        // G = 7758 × BV_gas × φ × (1-Swi) / Bgi
+        // Result in SCF, then convert to MMSCF by dividing by 1,000,000
+        const ogipSCF = 7758 * gasAcres * porosity * (1 - waterSat) / bgi;
+        ogip = ogipSCF / 1000000; // Convert to MMSCF
+    }
     
     const result = {
-        bulkVolume: areaInAcres,
+        bulkVolume: oilAcres,
+        bulkVolumeGas: gasAcres,
         ooip: ooip,
+        ogip: ogip,
+        hasGOC: gocIndex >= 0,
+        gocLevel: gocLevel,
         calculations: {
-            trapezoidal: trapezoidalResult,
-            pyramid: pyramidResult,
-            simpson38: simpson38Result
+            trapezoidal: {
+                bulkVolume: oilAcres,
+                bulkVolumeGas: gasAcres,
+                unit: 'acre-ft',
+                ooip: ooip,
+                ogip: ogip,
+                numberOfIntervals: areas.length - 1
+            }
         }
     };
-    
-    // Add calculated missing field to results
-    if (missingField) {
-        result.calculatedMissing = {};
-        if (missingField === 'porosity') {
-            result.calculatedMissing.porosity = porosity * 100;
-        } else if (missingField === 'waterSat') {
-            result.calculatedMissing.waterSat = waterSat * 100;
-        } else if (missingField === 'boiFactor') {
-            result.calculatedMissing.boiFactor = boi;
-        }
-    }
     
     return result;
 }
@@ -368,16 +322,43 @@ async function compute() {
     // Validate all required inputs
     const errors = [];
     
-    // Validate cross sections
-    document.querySelectorAll('.section-input input').forEach((input, i) => {
-        crossSections[i] = parseFloat(input.value);
-        if (!input.value || isNaN(parseFloat(input.value)) || parseFloat(input.value) <= 0) {
-            errors.push(`Section ${i + 1} area is missing or invalid`);
-        }
-    });
+    // Check: ALL area data must be entered (all 5 rows must be complete)
+    const tableInputs = document.querySelectorAll('.area-input');
+    let allAreasComplete = true;
     
-    if (crossSections.length === 0) {
+    if (tableInputs.length > 0) {
+        for (let input of tableInputs) {
+            // Check if input is empty or invalid
+            if (!input.value || isNaN(parseFloat(input.value)) || parseFloat(input.value) < 0) {
+                allAreasComplete = false;
+                break;
+            }
+        }
+    } else {
+        allAreasComplete = false;
+    }
+    
+    if (!allAreasComplete) {
+        showSimpleError('Fill all the data');
+        return;
+    }
+    
+    // Validate cross sections from table - collect all sections
+    if (tableInputs.length === 0) {
         errors.push('Please enter cross-sectional data');
+    } else {
+        crossSections = [];
+        tableInputs.forEach((input, i) => {
+            // Collect all validated inputs (already checked they're complete above)
+            if (input.value && !isNaN(parseFloat(input.value)) && parseFloat(input.value) >= 0) {
+                crossSections.push(parseFloat(input.value));
+            }
+        });
+        
+        // If sections don't match expected count, that's an error
+        if (crossSections.length !== tableInputs.length) {
+            errors.push('All cross-sectional area values must be valid');
+        }
     }
     
     // Validate spacing/contour interval
@@ -394,35 +375,35 @@ async function compute() {
     
     // Validate porosity
     const porosityInput = document.getElementById('porosity');
-    if (missingField !== 'porosity') {
-        if (!porosityInput.value || parseFloat(porosityInput.value) < 0 || parseFloat(porosityInput.value) > 100) {
-            errors.push('Porosity must be between 0 and 100 %');
-        }
+    if (!porosityInput.value || parseFloat(porosityInput.value) < 0 || parseFloat(porosityInput.value) > 100) {
+        errors.push('Porosity must be between 0 and 100 %');
     }
     
     // Validate water saturation
     const waterSatInput = document.getElementById('waterSat');
-    if (missingField !== 'waterSat') {
-        if (!waterSatInput.value || parseFloat(waterSatInput.value) < 0 || parseFloat(waterSatInput.value) > 100) {
-            errors.push('Water Saturation must be between 0 and 100 %');
-        }
+    if (!waterSatInput.value || parseFloat(waterSatInput.value) < 0 || parseFloat(waterSatInput.value) > 100) {
+        errors.push('Water Saturation must be between 0 and 100 %');
     }
     
-    // Validate BOi factor
+    // Validate Boi factor (required for oil calculation)
     const boiInput = document.getElementById('boiFactor');
-    if (missingField !== 'boiFactor') {
-        if (!boiInput.value || parseFloat(boiInput.value) <= 0) {
-            errors.push('Oil Formation Factor must be greater than 0');
-        }
+    if (!boiInput.value || parseFloat(boiInput.value) <= 0) {
+        errors.push('Oil Formation Factor (Boi) must be greater than 0');
     }
     
-    // Validate N (OOIP) field if a missing field is set
-    if (missingField) {
-        const nInput = document.getElementById('ooipValue');
-        if (!nInput || !nInput.value || parseFloat(nInput.value) <= 0) {
-            errors.push('OOIP (N) value is required when calculating a missing field');
-        }
+    // Get partial thickness values - at least one must be specified
+    const hGOCInput = document.getElementById('partialHeightGOC');
+    const hBottomInput = document.getElementById('partialHeightBottom');
+    const hGOC = hGOCInput.value ? parseFloat(hGOCInput.value) : null;
+    const hBottom = hBottomInput.value ? parseFloat(hBottomInput.value) : null;
+    
+    if (!hBottom && !hGOC) {
+        errors.push('Partial Thickness at Bottom (h\') must be specified');
     }
+    
+    // Determine GOC level - for now we'll support detecting it from inputs
+    let gocLevel = null;
+    // GOC level would be determined by user selecting/specifying it - not required for basic calc
     
     // If there are errors, display them and return
     if (errors.length > 0) {
@@ -430,109 +411,50 @@ async function compute() {
         return;
     }
     
-    const methods = getSelectedMethods();
-    if (methods.length === 0) {
-        displayValidationErrors(['Please select at least one formula']);
-        return;
-    }
-
     // Get reservoir properties
-    const mapScale = parseFloat(document.getElementById('mapScale').value);
-    let porosity = parseFloat(document.getElementById('porosity').value) / 100;
-    let waterSaturation = parseFloat(document.getElementById('waterSat').value) / 100;
-    let boiFactor = parseFloat(document.getElementById('boiFactor').value);
-    const spacing = parseFloat(document.getElementById('spacing').value) || 10;
-    const partialHeight = document.getElementById('partialHeight').value ? 
-        parseFloat(document.getElementById('partialHeight').value) : null;
-    const partialArea = document.getElementById('partialArea').value ? 
-        parseFloat(document.getElementById('partialArea').value) : null;
+    const mapScale = parseFloat(mapScaleInput.value);
+    const porosity = parseFloat(porosityInput.value) / 100;
+    const waterSaturation = parseFloat(waterSatInput.value) / 100;
+    const boiFactor = parseFloat(boiInput.value);
+    const spacing = parseFloat(spacingInput.value);
     
-    // If a field is missing, we'll calculate it after getting BV from client-side calculation
-    // For now, set it to a placeholder
-    if (missingField === 'porosity') {
-        porosity = 0.25; // Placeholder, will be calculated
-    } else if (missingField === 'waterSat') {
-        waterSaturation = 0.30; // Placeholder, will be calculated
-    } else if (missingField === 'boiFactor') {
-        boiFactor = 1.4; // Placeholder, will be calculated
-    }
+    // Get Bgi if specified
+    const bgiInput = document.getElementById('bgiFactor');
+    const bgiFactor = bgiInput.value ? parseFloat(bgiInput.value) : null;
     
     try {
         computeBtn.disabled = true;
         computeBtn.innerHTML = '<span class="spinner">⏳</span> Computing...';
         
-        const response = await fetch('/api/calculate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                crossSections,
-                heights,
-                methods,
-                mapScale,
-                porosity,
-                waterSaturation,
-                boiFormationVolumeFactor: boiFactor,
-                partialHeight,
-                partialArea,
-                missingField
-            })
-        });
+        // Use client-side calculation
+        const clientResults = calculateClientSide(
+            crossSections, 
+            spacing, 
+            mapScale, 
+            porosity, 
+            waterSaturation, 
+            boiFactor,
+            bgiFactor,
+            gocLevel,
+            hGOC,
+            hBottom
+        );
         
-        const results = await response.json();
-        
-        if (response.ok) {
-            // If there's a missing field, use client-side calculation to get the calculated missing value
-            if (missingField) {
-                const clientResults = calculateClientSide(crossSections, spacing, mapScale, porosity, waterSaturation, boiFactor);
-                if (clientResults) {
-                    lastResults = clientResults;
-                    clearValidationErrors();
-                    hasResults = true;
-                    displayResults(clientResults);
-                    displayInputTable();
-                } else {
-                    throw new Error('Could not calculate missing field');
-                }
-            } else {
-                lastResults = results;
-                clearValidationErrors();
-                hasResults = true;
-                displayResults(results);
-                displayInputTable();
-            }
-        } else {
-            // Fallback to client-side calculation
-            const fallbackResults = calculateClientSide(crossSections, spacing, mapScale, porosity, waterSaturation, boiFactor);
-            lastResults = fallbackResults;
+        if (clientResults) {
+            lastResults = clientResults;
             clearValidationErrors();
             hasResults = true;
-            displayResults(fallbackResults);
+            displayResults(clientResults);
             displayInputTable();
+        } else {
+            throw new Error('Calculation failed');
         }
     } catch (error) {
-        // API not available, use client-side calculation as fallback
-        console.warn('API not available, using client-side calculation:', error);
-        
-        try {
-            const fallbackResults = calculateClientSide(crossSections, spacing, mapScale, porosity, waterSaturation, boiFactor);
-            if (fallbackResults) {
-                lastResults = fallbackResults;
-                clearValidationErrors();
-                hasResults = true;
-                displayResults(fallbackResults);
-                displayInputTable();
-            } else {
-                throw new Error('Client-side calculation failed');
-            }
-        } catch (fallbackError) {
-            console.error('Calculation error:', fallbackError);
-            displayValidationErrors([fallbackError.message || 'An error occurred during calculation']);
-            computeBtn.disabled = false;
-            computeBtn.innerHTML = 'Calculate';
-            return;
-        }
+        console.error('Calculation error:', error);
+        displayValidationErrors([error.message || 'An error occurred during calculation']);
+        computeBtn.disabled = false;
+        computeBtn.innerHTML = 'Calculate';
+        return;
     } finally {
         computeBtn.disabled = false;
         // Only reset button if results were not successfully displayed
@@ -548,156 +470,61 @@ function displayResults(results) {
     lastResults = results;
     hasResults = true;  // Mark that results are available
     
+    // Reset modal header to normal (in case error was shown)
+    const modalHeader = document.querySelector('.modal-header h2');
+    if (modalHeader) {
+        modalHeader.textContent = 'Calculation Results';
+    }
+    
     // Build modal content
     let modalContent = '';
-    const methods = ['trapezoidal', 'pyramid', 'simpson38'];
     
-    // Add missing field information if applicable
-    if (missingField) {
-        let missingInfo = '';
-        let calculatedValue = '';
-        
-        if (missingField === 'porosity' && results.calculatedMissing?.porosity !== undefined) {
-            missingInfo = 'Porosity (φ)';
-            calculatedValue = results.calculatedMissing.porosity.toFixed(2) + ' %';
-        } else if (missingField === 'waterSat' && results.calculatedMissing?.waterSat !== undefined) {
-            missingInfo = 'Water Saturation (Swi)';
-            calculatedValue = results.calculatedMissing.waterSat.toFixed(2) + ' %';
-        } else if (missingField === 'boiFactor' && results.calculatedMissing?.boiFactor !== undefined) {
-            missingInfo = 'Oil Formation Factor (Boi)';
-            calculatedValue = results.calculatedMissing.boiFactor.toFixed(2) + ' bbl/STB';
-        }
-        
-        if (missingInfo) {
-            modalContent += `
-                <div class="missing-field-info" style="background-color: #e8f5e9; border-left: 4px solid #27ae60; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
-                    <strong style="color: #27ae60;">Missing Field Calculated</strong><br>
-                    <strong>${missingInfo}:</strong> ${calculatedValue}
-                </div>
-            `;
-        }
-        
-        // Also show BV and OOIP summary when missing field is calculated
-        if (results.bulkVolume && results.ooip) {
-            modalContent += `
-                <div class="results-summary-info" style="background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
-                    <strong style="color: #2196f3;">Calculation Results</strong><br>
-                    <strong>Bulk Volume (BV):</strong> ${results.bulkVolume.toFixed(2)} acre-ft &nbsp;&nbsp;
-                    <strong>OOIP (N):</strong> ${results.ooip.toFixed(2)} STB
-                </div>
-            `;
-        }
-    } else if (!missingField && results.bulkVolume && results.ooip) {
-        // Add BV and OOIP information if NO missing field
+    // Show GOC info if present
+    if (results.hasGOC) {
         modalContent += `
-            <div class="results-summary-info" style="background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
-                <strong style="color: #2196f3;">Calculation Summary</strong><br>
-                <strong>Bulk Volume (BV):</strong> ${results.bulkVolume.toFixed(2)} acre-ft &nbsp;&nbsp;
-                <strong>OOIP (N):</strong> ${results.ooip.toFixed(2)} STB
+            <div class="goc-info" style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                <strong style="color: #856404;">Gas-Oil Contact (GOC)</strong><br>
+                <strong>GOC at CL:</strong> ${results.gocLevel}
             </div>
         `;
     }
     
-    modalContent += `
-        <div class="results-table-wrapper">
-            <table class="results-table">
-                <thead>
-                    <tr>
-                        <th>Method</th>
-                        <th>Bulk Volume (BV)</th>
-                        <th>OOIP</th>
-                        <th>OOIP (Scientific)</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-    
-    methods.forEach(method => {
-        const calc = results.calculations[method];
-        
-        if (!calc) return;
-        
-        const methodName = method === 'trapezoidal' ? 'Trapezoidal Rule' : 
-                          method === 'pyramid' ? 'Pyramid Rule (Simpson\'s 1/3)' : 
-                          'Simpson\'s 3/8 Rule';
-        
-        if (calc.error) {
-            modalContent += `
-                <tr class="error-row">
-                    <td>${methodName}</td>
-                    <td colspan="3" style="color: #e74c3c; font-weight: bold;">${calc.error}</td>
-                </tr>
-            `;
-        } else {
-            const bv = (calc.bulkVolume || 0).toFixed(2);
-            const ooip = (calc.ooip || 0).toFixed(2);
-            const ooipSci = (calc.ooip / 1e8).toFixed(2);
-            
-            modalContent += `
-                <tr>
-                    <td><strong>${methodName}</strong></td>
-                    <td>${bv} ${calc.unit}</td>
-                    <td>${ooip} STB</td>
-                    <td>${ooipSci} × 10⁸ STB</td>
-                </tr>
-            `;
-            
-            // Add condition row for Simpson if applicable
-            if (method === 'simpson38' && calc.conditions) {
-                modalContent += `
-                    <tr class="condition-row">
-                        <td colspan="4">
-                            <strong>Simpson 3/8 Conditions:</strong>
-                            Odd sections: ${calc.conditions.hasOddSections ? 'Yes' : 'No'} | 
-                            Uniform thickness: ${calc.conditions.hasUniformThickness ? 'Yes' : 'No'}
-                        </td>
-                    </tr>
-                `;
-            }
-        }
-    });
-    
-    modalContent += `
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    // Add analysis table
-    if (crossSections.length >= 2) {
-        const spacing = parseFloat(document.getElementById('spacing').value) || 10;
+    // Show calculation results
+    const calc = results.calculations.trapezoidal;
+    if (calc) {
+        let bvOilStr = typeof calc.bulkVolume === 'number' ? calc.bulkVolume.toFixed(2) : 'N/A';
+        let bvGasStr = typeof calc.bulkVolumeGas === 'number' && calc.bulkVolumeGas > 0 ? calc.bulkVolumeGas.toFixed(2) : 'N/A';
+        let ooipStr = typeof calc.ooip === 'number' ? calc.ooip.toFixed(2) : (calc.ooip === 'N/A' ? 'N/A' : 'N/A');
+        let ogipStr = typeof calc.ogip === 'number' ? calc.ogip.toFixed(2) : (calc.ogip === 'N/A' ? 'N/A' : 'N/A');
         
         modalContent += `
-            <div class="analysis-table-wrapper">
-                <h3>Area Ratio Analysis (An/An-1 ≤ 0.5 Check)</h3>
-                <table class="analysis-table">
+            <div class="results-table-wrapper">
+                <table class="results-table">
                     <thead>
                         <tr>
-                            <th>Contour Level Interval</th>
-                            <th>An/An-1</th>
-                            <th>An/An-1 ≤ 0.5</th>
-                            <th>Interpretation</th>
+                            <th>Section</th>
+                            <th>Bulk Volume (acre-ft)</th>
+                            <th>OOIP (MMSTB)</th>
+                            <th>OGIP (MMSCF)</th>
                         </tr>
                     </thead>
                     <tbody>
+                        <tr>
+                            <td><strong>Oil</strong></td>
+                            <td><strong>${bvOilStr}</strong></td>
+                            <td><strong>${ooipStr}</strong></td>
+                            <td>-</td>
+                        </tr>
         `;
         
-        for (let i = 1; i < crossSections.length; i++) {
-            const prevArea = crossSections[i - 1];
-            const currArea = crossSections[i];
-            const ratio = prevArea > 0 ? (currArea / prevArea).toFixed(2) : 0;
-            const meetsCondition = parseFloat(ratio) <= 0.5;
-            
-            const cl1 = contourLines[i - 1] || (i - 1) * spacing;
-            const cl2 = contourLines[i] || i * spacing;
-            
+        if (results.hasGOC && calc.bulkVolumeGas > 0) {
             modalContent += `
-                <tr>
-                    <td>${cl1.toFixed(0)}-${cl2.toFixed(0)}</td>
-                    <td>${ratio}</td>
-                    <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes</span>' : '<span style="color: #e74c3c; font-weight: bold;">No</span>'}</td>
-                    <td>${meetsCondition ? '<span style="color: #27ae60;">Use Pyramidal</span>' : '<span style="color: #e74c3c;">Use Trapezoidal</span>'}</td>
-                </tr>
+                        <tr>
+                            <td><strong>Gas</strong></td>
+                            <td><strong>${bvGasStr}</strong></td>
+                            <td>-</td>
+                            <td><strong>${ogipStr}</strong></td>
+                        </tr>
             `;
         }
         
@@ -707,6 +534,9 @@ function displayResults(results) {
             </div>
         `;
     }
+    
+    // Add interval analysis table
+    modalContent += generateIntervalAnalysisTable();
     
     // Set results content in modal
     document.getElementById('modalResults').innerHTML = modalContent;
@@ -718,53 +548,37 @@ function displayResults(results) {
     showResultsModal();
 }
 
-// Display ratio analysis table (An/An-1 ≤ 0.5 check)
-function displayRatioAnalysisTable() {
-    if (crossSections.length < 2) return;
+// Generate interval analysis table for method selection
+function generateIntervalAnalysisTable() {
+    if (crossSections.length < 2) return '';
     
-    let html = `
-        <div class="analysis-table-wrapper">
-            <h3>Area Ratio Analysis (An/An-1 ≤ 0.5 Check)</h3>
-            <table class="analysis-table">
-                <thead>
-                    <tr>
-                        <th>Contour Level Interval</th>
-                        <th>An/An-1</th>
-                        <th>An/An-1 ≤ 0.5</th>
-                        <th>Interpretation</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
+    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis - Method Selection</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level Interval</th><th>A<sub>n</sub>/A<sub>n-1</sub></th><th>Ā<sub>n</sub>/Ā<sub>n-1</sub> ≤ 0.5</th><th>Interpretation</th></tr></thead><tbody>';
     
-    const spacing = parseFloat(document.getElementById('spacing').value) || 10;
-    
-    for (let i = 1; i < crossSections.length; i++) {
-        const prevArea = crossSections[i - 1];
-        const currArea = crossSections[i];
-        const ratio = prevArea > 0 ? (currArea / prevArea).toFixed(2) : 0;
-        const meetsCondition = parseFloat(ratio) <= 0.5;
+    for (let i = 0; i < crossSections.length - 1; i++) {
+        const an = crossSections[i];
+        const an1 = crossSections[i + 1];
+        const ratio = an1 / an;
         
-        const cl1 = contourLines[i - 1] || (i - 1) * spacing;
-        const cl2 = contourLines[i] || i * spacing;
+        // Check if the ratio is ≤ 0.5
+        const isValidRatio = ratio <= 0.5;
+        const method = isValidRatio ? 'Use Pyramidal' : 'Use Trapezoidal';
+        const methodColor = isValidRatio ? '#28a745' : '#007bff';
         
-        html += `
+        const cl1 = contourLines[i] !== undefined ? contourLines[i].toFixed(2) : i;
+        const cl2 = contourLines[i + 1] !== undefined ? contourLines[i + 1].toFixed(2) : (i + 1);
+        
+        tableHTML += `
             <tr>
-                <td>${cl1.toFixed(0)}-${cl2.toFixed(0)}</td>
-                <td>${ratio}</td>
-                <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes</span>' : '<span style="color: #e74c3c; font-weight: bold;">No</span>'}</td>
-                <td>${meetsCondition ? '<span style="color: #27ae60;">Use Pyramidal</span>' : '<span style="color: #e74c3c;">Use Trapezoidal</span>'}</td>
+                <td>${cl1}-${cl2}</td>
+                <td>${ratio.toFixed(2)}</td>
+                <td style="text-align: center; color: ${isValidRatio ? '#28a745' : '#999'};">${isValidRatio ? '✓ Yes' : 'No'}</td>
+                <td style="color: ${methodColor}; font-weight: bold;">${method}</td>
             </tr>
         `;
     }
     
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    resultsDiv.innerHTML += html;
+    tableHTML += '</tbody></table></div>';
+    return tableHTML;
 }
 
 // Show results modal
@@ -815,154 +629,7 @@ function setupModalHandlers() {
     });
 }
 
-// Missing Field Handler
-function setupMissingButton() {
-    const missingPorosityBtn = document.getElementById('missingPorosityBtn');
-    const missingSwiBtn = document.getElementById('missingSwiBtn');
-    const missingBoiBtn = document.getElementById('missingBoiBtn');
-    
-    let clickCounts = {};
-    const DOUBLE_CLICK_TIME = 300;
-    
-    function createClickHandler(field, btn) {
-        return () => {
-            if (!clickCounts[field]) {
-                clickCounts[field] = { count: 0, timer: null };
-            }
-            
-            clickCounts[field].count++;
-            
-            if (clickCounts[field].count === 1) {
-                // First click - set the missing field if not already set
-                if (missingField !== field) {
-                    missingField = field;
-                    disableMissingField();
-                    updateMissingButtonStates();
-                    showBVField();
-                }
-                
-                // Set timer for double-click detection
-                clickCounts[field].timer = setTimeout(() => {
-                    clickCounts[field].count = 0;
-                }, DOUBLE_CLICK_TIME);
-            } else if (clickCounts[field].count === 2) {
-                // Double click - toggle off
-                clearTimeout(clickCounts[field].timer);
-                missingField = null;
-                enableAllFields();
-                updateMissingButtonStates();
-                hideBVField();
-                clickCounts[field].count = 0;
-            }
-        };
-    }
-    
-    if (missingPorosityBtn) {
-        missingPorosityBtn.addEventListener('click', createClickHandler('porosity', missingPorosityBtn));
-    }
-    if (missingSwiBtn) {
-        missingSwiBtn.addEventListener('click', createClickHandler('waterSat', missingSwiBtn));
-    }
-    if (missingBoiBtn) {
-        missingBoiBtn.addEventListener('click', createClickHandler('boiFactor', missingBoiBtn));
-    }
-}
 
-function showBVField() {
-    const nFieldGroup = document.getElementById('nFieldGroup');
-    if (nFieldGroup) {
-        nFieldGroup.style.display = 'block';
-    }
-}
-
-function hideBVField() {
-    const nFieldGroup = document.getElementById('nFieldGroup');
-    if (nFieldGroup) {
-        nFieldGroup.style.display = 'none';
-    }
-}
-
-function updateBVField(bulkVolume) {
-    // BV is automatically calculated from area data, no need to display it
-}
-
-function updateMissingButtonStates() {
-    const missingPorosityBtn = document.getElementById('missingPorosityBtn');
-    const missingSwiBtn = document.getElementById('missingSwiBtn');
-    const missingBoiBtn = document.getElementById('missingBoiBtn');
-    
-    // Remove active state from all buttons
-    missingPorosityBtn.classList.remove('active');
-    missingSwiBtn.classList.remove('active');
-    missingBoiBtn.classList.remove('active');
-    
-    // Add active state to the selected button
-    if (missingField === 'porosity') {
-        missingPorosityBtn.classList.add('active');
-    } else if (missingField === 'waterSat') {
-        missingSwiBtn.classList.add('active');
-    } else if (missingField === 'boiFactor') {
-        missingBoiBtn.classList.add('active');
-    } else {
-        // No missing field - hide BV field
-        hideBVField();
-    }
-}
-
-function disableMissingField() {
-    const porosity = document.getElementById('porosity');
-    const waterSat = document.getElementById('waterSat');
-    const boiFactor = document.getElementById('boiFactor');
-    
-    // Enable all fields first and restore placeholders
-    porosity.disabled = false;
-    waterSat.disabled = false;
-    boiFactor.disabled = false;
-    
-    porosity.placeholder = 'e.g., 25';
-    waterSat.placeholder = 'e.g., 30';
-    boiFactor.placeholder = 'e.g., 1.4';
-    
-    porosity.style.backgroundColor = '';
-    waterSat.style.backgroundColor = '';
-    boiFactor.style.backgroundColor = '';
-    
-    // Disable and highlight the missing field
-    if (missingField === 'porosity') {
-        porosity.disabled = true;
-        porosity.value = '';
-        porosity.placeholder = '';
-        porosity.style.backgroundColor = '#ffebee';
-    } else if (missingField === 'waterSat') {
-        waterSat.disabled = true;
-        waterSat.value = '';
-        waterSat.placeholder = '';
-        waterSat.style.backgroundColor = '#ffebee';
-    } else if (missingField === 'boiFactor') {
-        boiFactor.disabled = true;
-        boiFactor.value = '';
-        boiFactor.placeholder = '';
-        boiFactor.style.backgroundColor = '#ffebee';
-    }
-}
-
-function enableAllFields() {
-    const porosity = document.getElementById('porosity');
-    const waterSat = document.getElementById('waterSat');
-    const boiFactor = document.getElementById('boiFactor');
-    
-    porosity.disabled = false;
-    waterSat.disabled = false;
-    boiFactor.disabled = false;
-    
-    porosity.placeholder = 'e.g., 25';
-    waterSat.placeholder = 'e.g., 30';
-    boiFactor.placeholder = 'e.g., 1.4';
-    
-    porosity.style.backgroundColor = '';
-    waterSat.style.backgroundColor = '';
-    boiFactor.style.backgroundColor = '';
-}
 
 // Show formulas modal
 function showFormulasModal() {
@@ -1138,6 +805,29 @@ function updateCharts() {
 }
 
 
+// Display simple error message
+function showSimpleError(message) {
+    const modal = document.getElementById('resultsModal');
+    const modalHeader = document.querySelector('.modal-header h2');
+    const modalBody = document.getElementById('modalResults');
+    
+    if (modalHeader) {
+        modalHeader.textContent = '⚠ Error';
+    }
+    
+    if (modalBody) {
+        modalBody.innerHTML = `<div style="padding: 20px; text-align: center; font-size: 1.1em; color: #d32f2f;">
+            <div style="margin-bottom: 10px; font-size: 2em;">⚠</div>
+            <div style="font-weight: 600; margin-bottom: 10px;">${message}</div>
+            <div style="font-size: 0.9em; color: #666; margin-top: 15px;">Please enter area values in the Input Summary table</div>
+        </div>`;
+    }
+    
+    if (modal) {
+        modal.classList.add('active');
+    }
+}
+
 // Display validation errors
 function displayValidationErrors(errors) {
     const resultsDiv = document.getElementById('results');
@@ -1163,7 +853,20 @@ function clearValidationErrors() {
 // Display input data table
 function displayInputTable() {
     const inputTable = document.getElementById('inputTable');
-    if (!inputTable || crossSections.length === 0) return;
+    if (!inputTable) {
+        console.error('Input table element not found');
+        return;
+    }
+    
+    // Ensure we have rows initialized (even if empty)
+    if (crossSections.length === 0) {
+        console.warn('No cross sections data. Initializing empty rows...');
+        // Initialize with 5 empty rows
+        for (let i = 0; i < 5; i++) {
+            crossSections[i] = '';
+            contourLines[i] = i * 10;
+        }
+    }
     
     let html = `
         <thead>
@@ -1176,23 +879,29 @@ function displayInputTable() {
         <tbody>
     `;
     
-    crossSections.forEach((area, i) => {
+    // Loop through all cross sections
+    for (let i = 0; i < crossSections.length; i++) {
+        const cl = contourLines[i] !== undefined ? contourLines[i] : i;
+        const areaValue = crossSections[i] !== '' && !isNaN(crossSections[i]) ? crossSections[i] : '';
+        const areaValueAttr = areaValue !== '' ? `value="${areaValue}"` : '';
+        
         html += `
             <tr>
                 <td>
                     <input type="number" 
                            class="table-input cl-input" 
                            data-index="${i}" 
-                           value="${contourLines[i] ? contourLines[i].toFixed(0) : i}" 
-                           step="0.1" 
+                           value="${cl.toFixed ? Math.round(cl) : cl}" 
+                           step="1" 
                            min="0">
                 </td>
                 <td>
                     <input type="number" 
                            class="table-input area-input" 
                            data-index="${i}" 
-                           value="${area.toFixed(0)}" 
-                           step="0.1" 
+                           placeholder="e.g., 10"
+                           ${areaValueAttr}
+                           step="any"
                            min="0">
                 </td>
                 <td style="text-align: center;">
@@ -1200,7 +909,7 @@ function displayInputTable() {
                 </td>
             </tr>
         `;
-    });
+    }
     
     html += `
         </tbody>
@@ -1225,24 +934,61 @@ function displayInputTable() {
             const index = parseInt(this.dataset.index);
             this.value = (contourLines[index] || index).toFixed(0);
         });
+        
+        // Add keyboard navigation - down arrow to next row
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const index = parseInt(this.dataset.index);
+                const nextInput = document.querySelector(`.cl-input[data-index="${index + 1}"]`);
+                if (nextInput) {
+                    nextInput.focus();
+                }
+            }
+        });
     });
     
     // Add event listeners to Area inputs
     document.querySelectorAll('.area-input').forEach(input => {
         input.addEventListener('change', function() {
             const index = parseInt(this.dataset.index);
-            const value = parseFloat(this.value);
-            if (!isNaN(value) && value >= 0) {
-                crossSections[index] = value;
+            const value = this.value.trim();
+            if (value) {
+                const numValue = parseFloat(value);
+                if (!isNaN(numValue) && numValue >= 0) {
+                    crossSections[index] = numValue;
+                }
             } else {
-                this.value = crossSections[index].toFixed(0);
+                crossSections[index] = '';
             }
             resetResults();
         });
         
         input.addEventListener('blur', function() {
             const index = parseInt(this.dataset.index);
-            this.value = crossSections[index].toFixed(0);
+            // Don't modify the value on blur - let user keep what they typed
+            // Just ensure it's stored in crossSections
+            const value = this.value.trim();
+            if (value) {
+                const numValue = parseFloat(value);
+                if (!isNaN(numValue) && numValue >= 0) {
+                    crossSections[index] = numValue;
+                }
+            } else {
+                crossSections[index] = '';
+            }
+        });
+        
+        // Add keyboard navigation - down arrow to next row
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const index = parseInt(this.dataset.index);
+                const nextInput = document.querySelector(`.area-input[data-index="${index + 1}"]`);
+                if (nextInput) {
+                    nextInput.focus();
+                }
+            }
         });
     });
     
@@ -1271,11 +1017,73 @@ function setupBackButton() {
 
 // Initialize on page load
 window.addEventListener('load', () => {
+    initializeDOMElements();
+    
+    // Add event listeners now that DOM elements are initialized
+    calculatorForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        handleComputeButtonClick();
+    });
+
+    addRowBtn.addEventListener('click', addTableRow);
+    spacingInput.addEventListener('change', resetResults);
+
+    // Add change listeners to all form inputs to reset button and update state
+    document.getElementById('mapScale')?.addEventListener('change', () => {
+        resetResults();
+        updateComputeButtonState();
+    });
+    document.getElementById('porosity')?.addEventListener('change', () => {
+        resetResults();
+        updateComputeButtonState();
+    });
+    document.getElementById('waterSat')?.addEventListener('change', () => {
+        resetResults();
+        updateComputeButtonState();
+    });
+    document.getElementById('boiFactor')?.addEventListener('change', () => {
+        resetResults();
+        updateComputeButtonState();
+    });
+    document.getElementById('mapScale')?.addEventListener('input', updateComputeButtonState);
+    document.getElementById('porosity')?.addEventListener('input', updateComputeButtonState);
+    document.getElementById('waterSat')?.addEventListener('input', updateComputeButtonState);
+    document.getElementById('boiFactor')?.addEventListener('input', updateComputeButtonState);
+    document.getElementById('boiFactor')?.addEventListener('change', resetResults);
+    document.getElementById('partialHeight')?.addEventListener('change', resetResults);
+    document.getElementById('partialArea')?.addEventListener('change', resetResults);
+    document.getElementById('ooipValue')?.addEventListener('change', resetResults);
+    csvFile.addEventListener('change', () => {
+        handleCsvUpload();
+    });
+    
     createHiddenCheckboxes();
     initializeTable();
     setupFormulasModalHandlers();
     setupBackButton();
-    setupMissingButton();
     setupModalHandlers();
     updateComputeButtonState(); // Initialize button state
+    enforceWholeNumberDisplay(); // Display whole numbers in UI
 });
+
+// Function to display whole numbers in inputs while maintaining calculation precision
+function enforceWholeNumberDisplay() {
+    // Get all number inputs
+    const numberInputs = document.querySelectorAll('input[type="number"]');
+    
+    numberInputs.forEach(input => {
+        // Round to whole number ONLY on blur (when user leaves field)
+        input.addEventListener('blur', function() {
+            if (this.value && !isNaN(this.value)) {
+                this.value = Math.round(parseFloat(this.value));
+            }
+        });
+        
+        // Round to whole number on change
+        input.addEventListener('change', function() {
+            if (this.value && !isNaN(this.value)) {
+                this.value = Math.round(parseFloat(this.value));
+            }
+        });
+    });
+}

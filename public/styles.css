@@ -4,6 +4,17 @@
     box-sizing: border-box;
 }
 
+/* Remove spinner arrows from all number inputs */
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     background: #ffffff;
@@ -167,8 +178,6 @@ body {
     gap: 8px;
     padding: 0 15px;
 }
-    gap: 10px;
-}
 
 /* Main input area */
 .quick-input {
@@ -298,6 +307,17 @@ body {
     transition: all 0.2s;
 }
 
+/* Remove spinner arrows from number inputs */
+.form-group input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+.form-group input[type="number"]::-webkit-outer-spin-button,
+.form-group input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 .form-group input:focus {
     outline: none;
     border-color: #999;
@@ -358,11 +378,6 @@ body {
     border-bottom: 1px solid #e5e5e5;
 }
 
-.data-table th:nth-child(3),
-.data-table td:nth-child(3) {
-    display: none;
-}
-
 .data-table th {
     background: #f5f5f5;
     font-weight: 600;
@@ -375,6 +390,49 @@ body {
 
 .data-table tbody tr:nth-child(even) {
     background: #f9f9f9;
+}
+
+/* Table inputs */
+.table-input {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-family: inherit;
+}
+
+/* Remove spinner arrows from table number inputs */
+.table-input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+.table-input[type="number"]::-webkit-outer-spin-button,
+.table-input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.table-input:focus {
+    outline: none;
+    border-color: #2196f3;
+    box-shadow: 0 0 3px rgba(33, 150, 243, 0.3);
+}
+
+.delete-btn {
+    background: none;
+    border: none;
+    color: #e74c3c;
+    cursor: pointer;
+    font-size: 1em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+.delete-btn:hover {
+    background: #ffebee;
+    color: #c62828;
 }
 
 /* Data buttons */
@@ -752,6 +810,59 @@ body {
     color: #333;
 }
 
+/* Interval analysis table styling */
+.interval-analysis-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 12px;
+}
+
+.interval-analysis-table thead {
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    color: white;
+    font-weight: 600;
+}
+
+.interval-analysis-table th {
+    padding: 12px 14px;
+    text-align: center;
+    font-size: 0.85em;
+    border-bottom: 2px solid #6c757d;
+}
+
+.interval-analysis-table th:first-child {
+    text-align: left;
+}
+
+.interval-analysis-table tbody tr {
+    border-bottom: 1px solid #e5e5e5;
+    transition: background-color 0.2s;
+}
+
+.interval-analysis-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.interval-analysis-table td {
+    padding: 10px 14px;
+    text-align: center;
+}
+
+.interval-analysis-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+    color: #333;
+}
+
+.interval-analysis-table tbody tr:last-child {
+    border-bottom: none;
+}
+
 /* Animations */
 @keyframes fadeIn {
     from {
@@ -914,11 +1025,6 @@ body {
     .panel-summary {
         font-size: 0.95em;
     }
-}
-
-/* Utility helper function styles */
-.setPlaceholder {
-    /* Used by action buttons */
 }
 
 /* Mobile Phone Responsive (Below 600px - Small phones) */

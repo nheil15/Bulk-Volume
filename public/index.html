@@ -11,11 +11,6 @@
     <div class="main-wrapper">
         <div class="chat-container">
             <div class="chat-header">
-                <div class="missing-buttons-group">
-                    <button type="button" id="missingPorosityBtn" class="btn btn-missing-field">φ Missing</button>
-                    <button type="button" id="missingSwiBtn" class="btn btn-missing-field">Swi Missing</button>
-                    <button type="button" id="missingBoiBtn" class="btn btn-missing-field">Boi Missing</button>
-                </div>
                 <p class="subtitle-text">Bulk Volume Calculator</p>
             </div>
 
@@ -33,7 +28,7 @@
                                     <div class="input-fields-column">
                                         <div class="form-group">
                                             <label for="spacing">Contour Interval (ft):</label>
-                                            <input type="number" id="spacing" min="0.1" max="100" step="0.1" value="10" placeholder="e.g., 10" required>
+                                            <input type="number" id="spacing" min="0" max="100" step="1" value="10" placeholder="e.g., 10" required>
                                         </div>
 
                                         <div class="data-buttons">
@@ -43,8 +38,6 @@
                                                     Upload CSV
                                                     <input type="file" id="csvFile" accept=".csv">
                                                 </label>
-                                            </div>
-                                            <div class="buttons-row-2">
                                                 <button type="button" id="formulasBtn" class="btn btn-secondary">Formulas</button>
                                             </div>
                                         </div>
@@ -66,48 +59,48 @@
                                 <div class="panel-content">
                                     <div class="form-group">
                                         <label for="mapScale">Map Scale (1:X):</label>
-                                        <input type="number" id="mapScale" min="1000" max="1000000" value="15000" placeholder="e.g., 15000" required>
+                                        <input type="number" id="mapScale" min="1000" max="1000000" step="any" value="15000" placeholder="e.g., 15000" required>
                                         <small>Converts in² to acres</small>
                                     </div>
 
                                     <div class="form-group">
                                         <label for="porosity">Porosity (φ) %:</label>
-                                        <input type="number" id="porosity" min="0" max="100" step="0.1" value="25" placeholder="e.g., 25" required>
+                                        <input type="number" id="porosity" min="0" max="100" step="any" value="25" placeholder="e.g., 25" required>
                                     </div>
 
                 <div class="form-group">
                     <label for="waterSat">Water Saturation (Swi) %:</label>
-                    <input type="number" id="waterSat" min="0" max="100" step="0.1" value="30" placeholder="e.g., 30" required>
+                    <input type="number" id="waterSat" min="0" max="100" step="any" value="30" placeholder="e.g., 30" required>
                 </div>
 
                                     <div class="form-group">
                                         <label for="boiFactor">Oil Formation Factor (Boi) bbl/STB:</label>
-                                        <input type="number" id="boiFactor" min="0.1" max="10" step="0.1" value="1.4" placeholder="e.g., 1.4" required>
+                                        <input type="number" id="boiFactor" min="0.1" max="10" step="any" value="1.4" placeholder="e.g., 1.4">
                                     </div>
 
-                                    <div class="form-group" id="nFieldGroup" style="display: none;">
-                                        <label for="ooipValue">OOIP (N) STB:</label>
-                                        <input type="number" id="ooipValue" min="0" step="1" placeholder="e.g., 6640771">
-                                        <small>Original Oil In Place value</small>
+                                    <div class="form-group">
+                                        <label for="bgiFactor">Gas Formation Factor (Bgi) scf/cf:</label>
+                                        <input type="number" id="bgiFactor" min="0" step="any" placeholder="e.g., 0.0035">
+                                        <small>Leave empty if no gas calculation</small>
                                     </div>
 
                                     <hr>
 
-                                    <h3>Gas-Oil Contact (Optional)</h3>
+                                    <h3>Gas-Oil Contact (GOC) - Optional</h3>
+
                                     <div class="form-group">
-                                        <label for="partialHeight">Partial Thickness (h') ft:</label>
-                                        <input type="number" id="partialHeight" step="0.1" placeholder="e.g., 6">
+                                        <label for="partialHeightGOC">Partial Thickness at GOC (h') ft:</label>
+                                        <input type="number" id="partialHeightGOC" step="any" placeholder="e.g., 3">
+                                        <small>Only needed if GOC is specified</small>
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="partialArea">Interpolated Area (A') acres:</label>
-                                        <input type="number" id="partialArea" step="0.1" placeholder="e.g., 0">
+                                        <label for="partialHeightBottom">Partial Thickness at Bottom (h') ft:</label>
+                                        <input type="number" id="partialHeightBottom" step="any" placeholder="e.g., 6">
+                                        <small>Thickness below GOC or at bottom of reservoir</small>
                                     </div>
 
-                                    <div class="info-box">
-                                        <strong>OOIP Formula:</strong><br>
-                                        N = 7758 × BV × φ × (1-Swi) / Boi
-                                    </div>
+
                                 </div>
                             </details>
                         </div>
@@ -148,36 +141,38 @@
             </div>
             <div class="modal-body">
                 <div class="formula-item">
-                    <strong>Bulk Volume (BV) Calculation Methods:</strong>
+                    <strong>1. Bulk Volume Calculation (Trapezoidal Method):</strong><br>
+                    BV<sub>in²-ft</sub> = (h/2) × (A₀ + 2A₁ + 2A₂ + ... + 2Aₙ₋₁ + Aₙ)
                 </div>
                 
                 <div class="formula-item">
-                    <strong>1. Trapezoidal Method:</strong><br>
-                    BV = (h/2) × (A₀ + 2A₁ + 2A₂ + ... + 2Aₙ₋₁ + Aₙ)
+                    <strong>2. Convert to Acre-ft:</strong><br>
+                    BV<sub>acre-ft</sub> = BV<sub>in²-ft</sub> × Map_Scale² / 6,272,640
                 </div>
                 
                 <div class="formula-item">
-                    <strong>2. Pyramid Method:</strong><br>
-                    BV = (h/3) × √(A₁ × A₂) for each interval
+                    <strong>3. Original Oil In Place (OOIP):</strong><br>
+                    N = 7758 × BV<sub>oil</sub> × φ × (1-Swi) / Boi / 1,000,000 (MMSTB)
                 </div>
                 
                 <div class="formula-item">
-                    <strong>3. Simpson 3/8 Rule:</strong><br>
-                    BV = (3h/8) × (A₀ + 3A₁ + 3A₂ + 2A₃ + ... + Aₙ)
-                </div>
-                
-                <div class="formula-item">
-                    <strong>OOIP (Original Oil In Place):</strong><br>
-                    N = 7758 × BV × φ × (1-Swi) / Boi
+                    <strong>4. Original Gas In Place (OGIP):</strong><br>
+                    G = 7758 × BV<sub>gas</sub> × φ × (1-Swi) / Bgi / 1,000,000 (MMSCF)
                 </div>
                 
                 <div class="formula-item">
                     <strong>Legend:</strong><br>
                     h = Contour Interval (ft)<br>
-                    A = Area at contour line (in²)<br>
-                    φ = Porosity (%)<br>
-                    Swi = Initial Water Saturation (%)<br>
-                    Boi = Oil Formation Factor (bbl/STB)
+                    A = Cross-sectional Area (in²)<br>
+                    Map_Scale = Map scale (1:X)<br>
+                    φ = Porosity (decimal)<br>
+                    Swi = Initial Water Saturation (decimal)<br>
+                    Boi = Oil Formation Factor (bbl/STB)<br>
+                    Bgi = Gas Formation Factor (scf/cf)<br>
+                    BV<sub>oil</sub> = Bulk Volume of Oil Section<br>
+                    BV<sub>gas</sub> = Bulk Volume of Gas Section (if GOC present)<br>
+                    MMSTB = Million Stock Tank Barrels<br>
+                    MMSCF = Million Standard Cubic Feet
                 </div>
             </div>
         </div>
