@@ -74,8 +74,26 @@
                 </div>
 
                                     <div class="form-group">
+                                        <label for="oilSatOil">Oil Saturation - Oil Zone (So) %:</label>
+                                        <input type="number" id="oilSatOil" min="0" max="100" step="any" value="80" placeholder="e.g., 80">
+                                        <small>Oil saturation in oil zone (Rel. Permeability Curve)</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="gasSatGas">Gas Saturation - Gas Zone (Sg) %:</label>
+                                        <input type="number" id="gasSatGas" min="0" max="100" step="any" value="75" placeholder="e.g., 75">
+                                        <small>Gas saturation in gas zone (Rel. Permeability Curve)</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="oilSatGas">Oil Saturation - Gas Zone (So) %:</label>
+                                        <input type="number" id="oilSatGas" min="0" max="100" step="any" value="25" placeholder="e.g., 25">
+                                        <small>Oil saturation in gas zone (Rel. Permeability Curve)</small>
+                                    </div>
+
+                                    <div class="form-group">
                                         <label for="boiFactor">Oil Formation Factor (Boi) bbl/STB:</label>
-                                        <input type="number" id="boiFactor" min="0.1" max="10" step="any" value="1.4" placeholder="e.g., 1.4">
+                                        <input type="number" id="boiFactor" min="0" step="any" value="1.4" placeholder="e.g., 1.4">
                                     </div>
 
                                     <div class="form-group">
@@ -87,6 +105,12 @@
                                     <hr>
 
                                     <h3>Gas-Oil Contact (GOC) - Optional</h3>
+
+                                    <div class="form-group">
+                                        <label for="gocLevel">Gas-Oil Contact Depth (ft):</label>
+                                        <input type="number" id="gocLevel" step="any" placeholder="e.g., 1043">
+                                        <small>Contour level where gas starts (leave empty if no gas zone)</small>
+                                    </div>
 
                                     <div class="form-group">
                                         <label for="partialHeightGOC">Partial Thickness at GOC (h') ft:</label>
@@ -152,12 +176,12 @@
                 
                 <div class="formula-item">
                     <strong>3. Original Oil In Place (OOIP):</strong><br>
-                    N = 7758 × BV<sub>oil</sub> × φ × (1-Swi) / Boi / 1,000,000 (MMSTB)
+                    N = 7758 × BV<sub>oil</sub> × φ × So / Boi / 1,000,000 (MMSTB)
                 </div>
                 
                 <div class="formula-item">
                     <strong>4. Original Gas In Place (OGIP):</strong><br>
-                    G = 7758 × BV<sub>gas</sub> × φ × (1-Swi) / Bgi / 1,000,000 (MMSCF)
+                    G = 43560 × BV<sub>gas</sub> × φ × Sg / Bgi / 1,000,000 (MMSCF)
                 </div>
                 
                 <div class="formula-item">
@@ -167,6 +191,8 @@
                     Map_Scale = Map scale (1:X)<br>
                     φ = Porosity (decimal)<br>
                     Swi = Initial Water Saturation (decimal)<br>
+                    So = Oil Saturation (decimal) - fraction of pore space occupied by oil<br>
+                    Sg = Gas Saturation (decimal) - fraction of pore space occupied by gas in gas zone<br>
                     Boi = Oil Formation Factor (bbl/STB)<br>
                     Bgi = Gas Formation Factor (scf/cf)<br>
                     BV<sub>oil</sub> = Bulk Volume of Oil Section<br>

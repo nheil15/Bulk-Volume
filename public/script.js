@@ -1,6 +1,7 @@
 let crossSections = [];
 let heights = [];
 let contourLines = [];
+let zoneSelections = []; // Store zone selection for each contour level
 let areaChart = null;
 let comparisonChart = null;
 let lastResults = null;
@@ -144,6 +145,7 @@ function addTableRow() {
     
     crossSections.push(''); // Add empty row for user to fill in
     contourLines.push(newIndex * spacing);
+    zoneSelections.push('oil'); // Default new rows to oil zone
     if (newIndex < crossSections.length - 1) {
         heights[newIndex] = spacing;
     }
@@ -156,6 +158,7 @@ function addTableRow() {
 function deleteTableRow(index) {
     crossSections.splice(index, 1);
     contourLines.splice(index, 1);
+    zoneSelections.splice(index, 1);
     
     // Update heights array
     heights = [];
@@ -188,12 +191,14 @@ function handleCsvUpload() {
         
         crossSections = [];
         heights = [];
+        zoneSelections = [];
         
         // Skip header and parse data
         for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',');
             if (values.length >= 2) {
                 crossSections.push(parseFloat(values[1]));
+                zoneSelections.push('oil'); // Default to oil zone
                 if (i < lines.length - 1) {
                     heights.push(1.0);
                 }
@@ -222,85 +227,86 @@ function getSelectedMethods() {
     return ['trapezoidal'];
 }
 
-// Client-side fallback calculation with GOC support
-function calculateClientSide(areas, spacing, mapScale, porosity, waterSat, boi, bgi, gocLevel, hGOC, hBottom) {
-    // Find GOC index if GOC is specified
-    let gocIndex = -1;
-    if (gocLevel !== null && gocLevel !== undefined) {
-        for (let i = 0; i < contourLines.length; i++) {
-            if (contourLines[i] == gocLevel) {
-                gocIndex = i;
-                break;
-            }
-        }
-    }
+// Calculate bulk volume by interval with appropriate method selection
+function calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, zoneName) {
+    if (areas.length < 2 || contourLevels.length < 2) return 0;
     
-    // Calculate oil section BV (from top to GOC)
-    let oilBV = 0;
-    let gasBV = 0;
-    let oilAcres = 0;
-    let gasAcres = 0;
+    let totalBV = 0;
     
-    if (gocIndex >= 0) {
-        // Case with GOC: calculate oil section from 0 to GOC
-        // Using hGOC as partial thickness at GOC
-        let sum = 0;
-        for (let i = 0; i < gocIndex; i++) {
-            sum += (areas[i] + areas[i + 1]) / 2;
+    // Process each interval
+    for (let i = 0; i < areas.length - 1; i++) {
+        // Check if this interval belongs to the specified zone
+        if (zoneSelections && zoneSelections[i] !== zoneName) {
+            continue;
         }
-        // Add GOC section with hGOC
-        sum += (areas[gocIndex] * hGOC / spacing);
-        oilBV = sum * spacing;
         
-        // Calculate gas section BV (from GOC to bottom)
-        // Using hBottom as partial thickness at bottom
-        let gasSum = 0;
-        for (let i = gocIndex + 1; i < areas.length - 1; i++) {
-            gasSum += (areas[i] + areas[i + 1]) / 2;
+        const a_n = areas[i];
+        const a_n1 = areas[i + 1];
+        const ratio = a_n1 / a_n;
+        // Calculate ACTUAL spacing between this pair of contours
+        const h = contourLevels[i + 1] - contourLevels[i];
+        
+        let intervalBV = 0;
+        
+        // Select method based on area ratio
+        if (ratio <= 0.5) {
+            // Use Pyramidal/Frustum method: BV = (h/3) × [A_i + A_{i+1} + √(A_i × A_{i+1})]
+            const geometricMean = Math.sqrt(a_n * a_n1);
+            intervalBV = (h / 3) * (a_n + a_n1 + geometricMean);
+        } else {
+            // Use Trapezoidal method: BV = (h/2) × [A_i + A_{i+1}]
+            intervalBV = (h / 2) * (a_n + a_n1);
         }
-        // Add bottom section with hBottom
-        gasSum += (areas[areas.length - 1] * hBottom / spacing);
-        gasBV = gasSum * spacing;
-    } else {
-        // No GOC: single calculation for oil with hBottom as full thickness
-        let sum = 0;
-        for (let i = 0; i < areas.length - 1; i++) {
-            sum += (areas[i] + areas[i + 1]) / 2;
-        }
-        // Add last section with hBottom
-        sum += (areas[areas.length - 1] * hBottom / spacing);
-        oilBV = sum * spacing;
+        
+        totalBV += intervalBV;
     }
+    
+    return totalBV;
+}
+
+// Client-side fallback calculation using per-contour zone selections
+function calculateClientSide(areas, spacing, mapScale, porosity, waterSat, boi, bgi, gocLevel, hGOC, hBottom, oilSatOil, gasSatGas, oilSatGas) {
+    // Ensure zoneSelections exist
+    if (!zoneSelections || zoneSelections.length === 0) {
+        // If no zone selections, treat all as oil
+        zoneSelections = areas.map(() => 'oil');
+    }
+    
+    // Calculate bulk volumes separately for oil and gas zones by interval
+    let oilBV = calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, 'oil');
+    let gasBV = calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, 'gas');
     
     // Convert BV (in²-ft) to acres using map scale
     // BV in acres = (BV in in²-ft) × (mapScale²) / 6,272,640
-    oilAcres = (oilBV * mapScale * mapScale) / 6272640;
-    gasAcres = (gasBV * mapScale * mapScale) / 6272640;
+    let oilAcres = (oilBV * mapScale * mapScale) / 6272640;
+    let gasAcres = (gasBV * mapScale * mapScale) / 6272640;
     
-    // Calculate OOIP (Oil)
+    // Calculate OOIP (Oil) using Oil Saturation in Oil Zone
     let ooip = 'N/A';
-    if (boi && boi > 0) {
-        // N = 7758 × BV_oil × φ × (1-Swi) / Boi
+    if (boi && boi > 0 && oilAcres > 0) {
+        // N = 7758 × BV_oil × φ × So_oil / Boi
         // Result in STB, then convert to MMSTB by dividing by 1,000,000
-        const ooipSTB = 7758 * oilAcres * porosity * (1 - waterSat) / boi;
+        const ooipSTB = 7758 * oilAcres * porosity * oilSatOil / boi;
         ooip = ooipSTB / 1000000; // Convert to MMSTB
     }
     
-    // Calculate OGIP (Gas)
+    // Calculate OGIP (Gas) using Gas Saturation in Gas Zone
     let ogip = 'N/A';
     if (bgi && bgi > 0 && gasAcres > 0) {
-        // G = 7758 × BV_gas × φ × (1-Swi) / Bgi
+        // G = 43560 × BV_gas × φ × Sg_gas / Bgi
         // Result in SCF, then convert to MMSCF by dividing by 1,000,000
-        const ogipSCF = 7758 * gasAcres * porosity * (1 - waterSat) / bgi;
+        const ogipSCF = 43560 * gasAcres * porosity * gasSatGas / bgi;
         ogip = ogipSCF / 1000000; // Convert to MMSCF
     }
     
     const result = {
         bulkVolume: oilAcres,
         bulkVolumeGas: gasAcres,
+        bulkVolumeInches: oilBV,
+        bulkVolumeGasInches: gasBV,
         ooip: ooip,
         ogip: ogip,
-        hasGOC: gocIndex >= 0,
+        hasGOC: gocLevel !== null && !isNaN(gocLevel),
         gocLevel: gocLevel,
         calculations: {
             trapezoidal: {
@@ -348,10 +354,22 @@ async function compute() {
         errors.push('Please enter cross-sectional data');
     } else {
         crossSections = [];
+        contourLevels = []; // Also read C.L values from input fields
+        const clInputs = document.querySelectorAll('.cl-input');
+        
         tableInputs.forEach((input, i) => {
             // Collect all validated inputs (already checked they're complete above)
             if (input.value && !isNaN(parseFloat(input.value)) && parseFloat(input.value) >= 0) {
                 crossSections.push(parseFloat(input.value));
+            }
+            // Read C.L values from input fields
+            if (clInputs[i]) {
+                const clValue = parseFloat(clInputs[i].value);
+                if (!isNaN(clValue)) {
+                    contourLevels.push(clValue);
+                } else {
+                    contourLevels.push(i * 10); // Fallback to index * spacing
+                }
             }
         });
         
@@ -401,9 +419,15 @@ async function compute() {
         errors.push('Partial Thickness at Bottom (h\') must be specified');
     }
     
-    // Determine GOC level - for now we'll support detecting it from inputs
+    // Get GOC level from input if specified
+    const gocLevelInput = document.getElementById('gocLevel');
     let gocLevel = null;
-    // GOC level would be determined by user selecting/specifying it - not required for basic calc
+    if (gocLevelInput && gocLevelInput.value) {
+        const gocValue = parseFloat(gocLevelInput.value);
+        if (!isNaN(gocValue)) {
+            gocLevel = gocValue;
+        }
+    }
     
     // If there are errors, display them and return
     if (errors.length > 0) {
@@ -422,6 +446,15 @@ async function compute() {
     const bgiInput = document.getElementById('bgiFactor');
     const bgiFactor = bgiInput.value ? parseFloat(bgiInput.value) : null;
     
+    // Get saturation values
+    const oilSatOilInput = document.getElementById('oilSatOil');
+    const gasSatGasInput = document.getElementById('gasSatGas');
+    const oilSatGasInput = document.getElementById('oilSatGas');
+    
+    const oilSatOil = oilSatOilInput.value ? parseFloat(oilSatOilInput.value) / 100 : 0.80;
+    const gasSatGas = gasSatGasInput.value ? parseFloat(gasSatGasInput.value) / 100 : 0.75;
+    const oilSatGas = oilSatGasInput.value ? parseFloat(oilSatGasInput.value) / 100 : 0.25;
+    
     try {
         computeBtn.disabled = true;
         computeBtn.innerHTML = '<span class="spinner">⏳</span> Computing...';
@@ -437,7 +470,10 @@ async function compute() {
             bgiFactor,
             gocLevel,
             hGOC,
-            hBottom
+            hBottom,
+            oilSatOil,
+            gasSatGas,
+            oilSatGas
         );
         
         if (clientResults) {
@@ -552,7 +588,7 @@ function displayResults(results) {
 function generateIntervalAnalysisTable() {
     if (crossSections.length < 2) return '';
     
-    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis - Method Selection</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level Interval</th><th>A<sub>n</sub>/A<sub>n-1</sub></th><th>Ā<sub>n</sub>/Ā<sub>n-1</sub> ≤ 0.5</th><th>Interpretation</th></tr></thead><tbody>';
+    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis - Method Selection</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level Interval</th><th>Zone</th><th>A<sub>n</sub>/A<sub>n-1</sub></th><th>Ā<sub>n</sub>/Ā<sub>n-1</sub> ≤ 0.5</th><th>Interpretation</th></tr></thead><tbody>';
     
     for (let i = 0; i < crossSections.length - 1; i++) {
         const an = crossSections[i];
@@ -567,9 +603,15 @@ function generateIntervalAnalysisTable() {
         const cl1 = contourLines[i] !== undefined ? contourLines[i].toFixed(2) : i;
         const cl2 = contourLines[i + 1] !== undefined ? contourLines[i + 1].toFixed(2) : (i + 1);
         
+        // Determine zone from user selections
+        const selectedZone = zoneSelections[i] || 'oil';
+        const zone = selectedZone.charAt(0).toUpperCase() + selectedZone.slice(1);
+        const zoneColor = selectedZone === 'oil' ? '#1a3a52' : '#dc3545'; // Blue for Oil, Red for Gas
+        
         tableHTML += `
             <tr>
                 <td>${cl1}-${cl2}</td>
+                <td style="color: ${zoneColor}; font-weight: bold;">${zone}</td>
                 <td>${ratio.toFixed(2)}</td>
                 <td style="text-align: center; color: ${isValidRatio ? '#28a745' : '#999'};">${isValidRatio ? '✓ Yes' : 'No'}</td>
                 <td style="color: ${methodColor}; font-weight: bold;">${method}</td>
@@ -865,13 +907,20 @@ function displayInputTable() {
         for (let i = 0; i < 5; i++) {
             crossSections[i] = '';
             contourLines[i] = i * 10;
+            zoneSelections[i] = 'oil'; // Default zone
         }
+    }
+    
+    // Ensure zoneSelections array is same length as crossSections
+    while (zoneSelections.length < crossSections.length) {
+        zoneSelections.push('oil'); // Default new rows to oil
     }
     
     let html = `
         <thead>
             <tr>
                 <th>C.L</th>
+                <th>Zone</th>
                 <th>Area (inch²)</th>
                 <th style="text-align: center;">Action</th>
             </tr>
@@ -884,6 +933,7 @@ function displayInputTable() {
         const cl = contourLines[i] !== undefined ? contourLines[i] : i;
         const areaValue = crossSections[i] !== '' && !isNaN(crossSections[i]) ? crossSections[i] : '';
         const areaValueAttr = areaValue !== '' ? `value="${areaValue}"` : '';
+        const selectedZone = zoneSelections[i] || 'oil';
         
         html += `
             <tr>
@@ -894,6 +944,12 @@ function displayInputTable() {
                            value="${cl.toFixed ? Math.round(cl) : cl}" 
                            step="1" 
                            min="0">
+                </td>
+                <td style="text-align: center;">
+                    <select class="zone-select" data-index="${i}">
+                        <option value="oil" ${selectedZone === 'oil' ? 'selected' : ''}>Oil</option>
+                        <option value="gas" ${selectedZone === 'gas' ? 'selected' : ''}>Gas</option>
+                    </select>
                 </td>
                 <td>
                     <input type="number" 
@@ -945,6 +1001,15 @@ function displayInputTable() {
                     nextInput.focus();
                 }
             }
+        });
+    });
+    
+    // Add event listeners to Zone selectors
+    document.querySelectorAll('.zone-select').forEach(select => {
+        select.addEventListener('change', function() {
+            const index = parseInt(this.dataset.index);
+            zoneSelections[index] = this.value;
+            resetResults();
         });
     });
     
@@ -1066,24 +1131,26 @@ window.addEventListener('load', () => {
     enforceWholeNumberDisplay(); // Display whole numbers in UI
 });
 
-// Function to display whole numbers in inputs while maintaining calculation precision
+// Function to enforce whole number display ONLY for specific fields
 function enforceWholeNumberDisplay() {
-    // Get all number inputs
-    const numberInputs = document.querySelectorAll('input[type="number"]');
+    // Only round whole numbers for spacing/contour interval and map scale
+    // DO NOT round saturation values, porosity, or formation factors
+    const fieldsToRound = ['spacing', 'mapScale', 'partialHeightGOC', 'partialHeightBottom', 'gocLevel'];
     
-    numberInputs.forEach(input => {
-        // Round to whole number ONLY on blur (when user leaves field)
-        input.addEventListener('blur', function() {
-            if (this.value && !isNaN(this.value)) {
-                this.value = Math.round(parseFloat(this.value));
-            }
-        });
-        
-        // Round to whole number on change
-        input.addEventListener('change', function() {
-            if (this.value && !isNaN(this.value)) {
-                this.value = Math.round(parseFloat(this.value));
-            }
-        });
+    fieldsToRound.forEach(fieldId => {
+        const input = document.getElementById(fieldId);
+        if (input) {
+            input.addEventListener('blur', function() {
+                if (this.value && !isNaN(this.value)) {
+                    this.value = Math.round(parseFloat(this.value));
+                }
+            });
+            
+            input.addEventListener('change', function() {
+                if (this.value && !isNaN(this.value)) {
+                    this.value = Math.round(parseFloat(this.value));
+                }
+            });
+        }
     });
 }

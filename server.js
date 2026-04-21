@@ -21,6 +21,41 @@ function convertMapAreaToAcres(areaInch2, mapScale) {
   return areaAcres;
 }
 
+// Calculate bulk volume by interval with appropriate method selection
+function calculateBulkVolumeByInterval(areas, spacing, zoneSelections, zoneName) {
+  if (areas.length < 2) return 0;
+  
+  let totalBV = 0;
+  
+  // Process each interval
+  for (let i = 0; i < areas.length - 1; i++) {
+    // Check if this interval belongs to the specified zone
+    if (zoneSelections && zoneSelections[i] !== zoneName) {
+      continue;
+    }
+    
+    const a_n = areas[i];
+    const a_n1 = areas[i + 1];
+    const ratio = a_n1 / a_n;
+    
+    let intervalBV = 0;
+    
+    // Select method based on area ratio
+    if (ratio <= 0.5) {
+      // Use Pyramidal/Frustum method: BV = (h/3) × [A_i + A_{i+1} + √(A_i × A_{i+1})]
+      const geometricMean = Math.sqrt(a_n * a_n1);
+      intervalBV = (spacing / 3) * (a_n + a_n1 + geometricMean);
+    } else {
+      // Use Trapezoidal method: BV = (h/2) × [A_i + A_{i+1}]
+      intervalBV = (spacing / 2) * (a_n + a_n1);
+    }
+    
+    totalBV += intervalBV;
+  }
+  
+  return totalBV;
+}
+
 // Calculation Functions
 function trapezoidalRule(heights, crossSections, partialHeight = null, partialArea = null) {
   if (crossSections.length < 2) return null;
@@ -89,14 +124,69 @@ function simpsons38Rule(heights, crossSections, partialHeight = null, partialAre
 }
 
 // Calculate Original Oil in Place
-function calculateOOIP(bulkVolume, porosity, waterSaturation, boiFormationVolumeFactor) {
-  // N = 7758 × BV × φ × (1 - Swi) / Boi
-  if (!bulkVolume || porosity === null || waterSaturation === null || !boiFormationVolumeFactor) {
+function calculateOOIP(bulkVolume, porosity, oilSaturation, boiFormationVolumeFactor) {
+  // N = 7758 × BV × φ × So / Boi
+  // Where So is the oil saturation in the oil zone
+  if (!bulkVolume || porosity === null || oilSaturation === null || !boiFormationVolumeFactor) {
     return null;
   }
   
-  const n = (7758 * bulkVolume * porosity * (1 - waterSaturation)) / boiFormationVolumeFactor;
+  const n = (7758 * bulkVolume * porosity * oilSaturation) / boiFormationVolumeFactor;
   return n;
+}
+
+// Calculate Original Gas in Place
+function calculateOGIP(bulkVolume, porosity, gasSaturation, bgiFormationVolumeFactor) {
+  // G = 43560 × BV × φ × Sg / Bgi
+  // Where Sg is the gas saturation in the gas zone
+  // Note: 43560 = ft³ per acre-ft (converts acre-ft to SCF)
+  if (!bulkVolume || porosity === null || gasSaturation === null || !bgiFormationVolumeFactor) {
+    return null;
+  }
+  
+  const g = (43560 * bulkVolume * porosity * gasSaturation) / bgiFormationVolumeFactor;
+  return g;
+}
+
+// Split cross-sections into oil and gas zones based on GOC
+function splitByGOC(crossSections, contourLevels, heights, gocLevel) {
+  // Find the GOC index
+  let gocIndex = -1;
+  for (let i = 0; i < contourLevels.length; i++) {
+    if (Math.abs(contourLevels[i] - gocLevel) < 0.01) {
+      gocIndex = i;
+      break;
+    }
+  }
+  
+  if (gocIndex === -1) {
+    // GOC not found at exact level, find closest
+    let minDiff = Math.abs(contourLevels[0] - gocLevel);
+    gocIndex = 0;
+    for (let i = 1; i < contourLevels.length; i++) {
+      const diff = Math.abs(contourLevels[i] - gocLevel);
+      if (diff < minDiff) {
+        minDiff = diff;
+        gocIndex = i;
+      }
+    }
+  }
+  
+  // Split the arrays
+  const oilSections = crossSections.slice(0, gocIndex + 1);
+  const gasSections = crossSections.slice(gocIndex);
+  
+  const oilHeights = heights.slice(0, gocIndex);
+  const gasHeights = heights.slice(gocIndex);
+  
+  return {
+    oilSections,
+    gasSections,
+    oilHeights,
+    gasHeights,
+    gocIndex,
+    gocContourLevel: contourLevels[gocIndex]
+  };
 }
 
 // Check Simpson conditions: requires odd number of sections and uniform thickness
@@ -133,12 +223,20 @@ app.post('/api/calculate', (req, res) => {
       heights, 
       methods,
       contourLevels,
+      zoneSelections,
       mapScale,
       porosity,
       waterSaturation,
       boiFormationVolumeFactor,
+      bgiFormationVolumeFactor,
+      oilSaturation,
+      gasSaturation,
+      oilSaturationGas,
+      gocLevel,
       partialHeight,
       partialArea,
+      partialHeightGOC,
+      partialHeightBottom,
       missingField
     } = req.body;
     
@@ -147,7 +245,8 @@ app.post('/api/calculate', (req, res) => {
     }
 
     const results = {
-      calculations: {}
+      calculations: {},
+      zoneInfo: {}
     };
 
     // Convert areas from in² to acres if mapScale is provided
@@ -157,8 +256,70 @@ app.post('/api/calculate', (req, res) => {
       results.unitConversions = {
         mapScale: mapScale,
         areasIn2: crossSections,
-        areasInAcres: areasInAcres.map(a => a.toFixed(2))
+        areasInAcres: areasInAcres.map(a => a.toFixed(4))
       };
+    }
+
+    // Split data by zone selections if provided
+    let oilAreas = areasInAcres;
+    let gasAreas = [];
+    let oilHeights = heights;
+    let gasHeights = [];
+    let zoneInfo = null;
+
+    if (zoneSelections && Array.isArray(zoneSelections)) {
+      // Use zone selections to split data
+      let oilSum = 0;
+      let gasSum = 0;
+      let oilHeightCount = 0;
+      let gasHeightCount = 0;
+      let oilAreaList = [];
+      let gasAreaList = [];
+      
+      for (let i = 0; i < crossSections.length; i++) {
+        const zone = zoneSelections[i] || 'oil';
+        if (zone === 'oil') {
+          oilAreaList.push(areasInAcres[i]);
+          if (i < heights.length) {
+            oilHeights[oilHeightCount] = heights[i];
+            oilHeightCount++;
+          }
+        } else if (zone === 'gas') {
+          gasAreaList.push(areasInAcres[i]);
+          if (i < heights.length) {
+            gasHeights[gasHeightCount] = heights[i];
+            gasHeightCount++;
+          }
+        }
+      }
+      
+      oilAreas = oilAreaList;
+      gasAreas = gasAreaList;
+      oilHeights = oilHeights.slice(0, oilHeightCount);
+      gasHeights = gasHeights.slice(0, gasHeightCount);
+      
+      zoneInfo = {
+        oilZoneCount: oilAreaList.length,
+        gasZoneCount: gasAreaList.length
+      };
+      
+      results.zoneInfo = zoneInfo;
+    } else if (gocLevel !== null && gocLevel !== undefined) {
+      // Fallback to GOC-based splitting if zoneSelections not provided
+      const split = splitByGOC(areasInAcres, contourLevels || [], heights, gocLevel);
+      oilAreas = split.oilSections;
+      gasAreas = split.gasSections;
+      oilHeights = split.oilHeights;
+      gasHeights = split.gasHeights;
+      
+      zoneInfo = {
+        gocDepth: gocLevel,
+        gocIndex: split.gocIndex,
+        oilZoneCount: split.oilSections.length,
+        gasZoneCount: split.gasSections.length
+      };
+      
+      results.zoneInfo = zoneInfo;
     }
 
     // If a missing field is specified, calculate it from OOIP
@@ -183,38 +344,90 @@ app.post('/api/calculate', (req, res) => {
     }
 
     if (methods.includes('trapezoidal')) {
-      const bv = trapezoidalRule(heights, areasInAcres, partialHeight, partialArea);
+      // Calculate oil zone using interval-based method if zone selections provided
+      let oilBV;
+      if (zoneSelections && Array.isArray(zoneSelections)) {
+        oilBV = calculateBulkVolumeByInterval(areasInAcres, spacing || heights[0], zoneSelections, 'oil');
+      } else {
+        oilBV = trapezoidalRule(oilHeights, oilAreas, partialHeightGOC, null);
+      }
+      
+      const oilOOIP = calculateOOIP(oilBV, porosity, oilSaturation || 0.80, boiFormationVolumeFactor);
+      
       results.calculations.trapezoidal = {
-        bulkVolume: bv,
+        bulkVolumeOil: oilBV,
+        oilOOIP: oilOOIP,
         unit: 'acre-ft',
-        ooip: calculateOOIP(bv, porosity, waterSaturation, boiFormationVolumeFactor),
         ooipUnit: 'STB'
       };
+      
+      // Calculate gas zone if gas areas exist and Bgi is provided
+      if ((zoneSelections && zoneSelections.some(z => z === 'gas')) || (gasAreas.length > 0)) {
+        let gasBV;
+        if (zoneSelections && Array.isArray(zoneSelections)) {
+          gasBV = calculateBulkVolumeByInterval(areasInAcres, spacing || heights[0], zoneSelections, 'gas');
+        } else {
+          gasBV = trapezoidalRule(gasHeights, gasAreas, partialHeightBottom, null);
+        }
+        
+        if (gasBV > 0 && bgiFormationVolumeFactor) {
+          const gasOGIP = calculateOGIP(gasBV, porosity, gasSaturation || 0.75, bgiFormationVolumeFactor);
+          results.calculations.trapezoidal.bulkVolumeGas = gasBV;
+          results.calculations.trapezoidal.gasOGIP = gasOGIP;
+          results.calculations.trapezoidal.ogipUnit = 'SCF';
+        }
+      }
     }
 
     if (methods.includes('pyramid')) {
       // Pyramid method has NO specific conditions - works for any number of sections
-      const bv = pyramidRule(heights, areasInAcres, partialHeight, partialArea);
+      const oilBV = pyramidRule(oilHeights, oilAreas, partialHeightGOC, null);
+      const oilOOIP = calculateOOIP(oilBV, porosity, oilSaturation || 0.80, boiFormationVolumeFactor);
+      
       results.calculations.pyramid = {
-        bulkVolume: bv,
+        bulkVolumeOil: oilBV,
+        oilOOIP: oilOOIP,
         unit: 'acre-ft',
-        ooip: calculateOOIP(bv, porosity, waterSaturation, boiFormationVolumeFactor),
         ooipUnit: 'STB'
       };
+      
+      // Calculate gas zone if gas areas exist and Bgi is provided
+      if (gasAreas.length > 0 && bgiFormationVolumeFactor) {
+        const gasBV = pyramidRule(gasHeights, gasAreas, partialHeightBottom, null);
+        const gasOGIP = calculateOGIP(gasBV, porosity, gasSaturation || 0.75, bgiFormationVolumeFactor);
+        results.calculations.pyramid.bulkVolumeGas = gasBV;
+        results.calculations.pyramid.gasOGIP = gasOGIP;
+        results.calculations.pyramid.ogipUnit = 'SCF';
+      }
     }
 
     if (methods.includes('simpson38')) {
-      const simpsonConditions = checkSimpsonConditions(heights, areasInAcres);
+      const simpsonConditions = checkSimpsonConditions(oilHeights, oilAreas);
       
       if (simpsonConditions.hasOddSections && simpsonConditions.hasUniformThickness) {
-        const bv = simpsons38Rule(heights, areasInAcres, partialHeight, partialArea);
+        const oilBV = simpsons38Rule(oilHeights, oilAreas, partialHeightGOC, null);
+        const oilOOIP = calculateOOIP(oilBV, porosity, oilSaturation || 0.80, boiFormationVolumeFactor);
+        
         results.calculations.simpson38 = {
-          bulkVolume: bv,
+          bulkVolumeOil: oilBV,
+          oilOOIP: oilOOIP,
           unit: 'acre-ft',
-          ooip: calculateOOIP(bv, porosity, waterSaturation, boiFormationVolumeFactor),
           ooipUnit: 'STB',
           conditions: simpsonConditions
         };
+        
+        // Calculate gas zone if gas areas exist and Bgi is provided
+        if (gasAreas.length > 0 && bgiFormationVolumeFactor) {
+          const gasConditions = checkSimpsonConditions(gasHeights, gasAreas);
+          if (gasConditions.hasOddSections && gasConditions.hasUniformThickness) {
+            const gasBV = simpsons38Rule(gasHeights, gasAreas, partialHeightBottom, null);
+            const gasOGIP = calculateOGIP(gasBV, porosity, gasSaturation || 0.75, bgiFormationVolumeFactor);
+            results.calculations.simpson38.bulkVolumeGas = gasBV;
+            results.calculations.simpson38.gasOGIP = gasOGIP;
+            results.calculations.simpson38.ogipUnit = 'SCF';
+            results.calculations.simpson38.gasConditions = gasConditions;
+          }
+        }
       } else {
         results.calculations.simpson38 = {
           error: 'Simpson 3/8 Method requires: ' + simpsonConditions.errors.join(', '),
