@@ -525,6 +525,10 @@ body {
 .file-btn {
     position: relative;
     overflow: hidden;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .file-btn input[type="file"] {
@@ -1178,6 +1182,10 @@ body {
     .buttons-row-2 .btn {
         width: 100%;
         flex: none;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .btn {
@@ -1186,6 +1194,10 @@ body {
         min-height: 44px;
         touch-action: manipulation;
         width: auto;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .btn-secondary {
