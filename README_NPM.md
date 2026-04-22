@@ -47,6 +47,73 @@ The application will run at: **http://localhost:3000**
 npm run dev
 ```
 
+## 📱 Mobile-Responsive Design
+
+The application is fully responsive and works great on:
+- **Desktop** (1920px and above)
+- **Tablets** (768px - 1024px)
+- **Mobile Phones** (< 768px)
+- **Small Phones** (< 600px)
+
+Features optimized for mobile:
+- Touch-friendly buttons (minimum 44px height)
+- Responsive form fields with proper sizing
+- Collapsible sections for better space usage
+- Scrollable tables for data viewing
+- Modal dialogs that adapt to screen size
+
+### Testing on Mobile:
+1. Use Chrome/Firefox DevTools (F12 → Toggle Device Toolbar)
+2. Or access from your phone using your computer's IP address
+
+## 🚀 Deploy to Vercel
+
+### Prerequisites:
+- GitHub account
+- Vercel account (free at https://vercel.com)
+
+### Step 1: Push to GitHub
+```bash
+git init
+git add .
+git commit -m "Bulk Volume Calculator - Ready for deployment"
+git remote add origin https://github.com/YOUR_USERNAME/bulk-volume-calculator.git
+git push -u origin main
+```
+
+### Step 2: Deploy to Vercel
+1. Go to [https://vercel.com](https://vercel.com) and sign in
+2. Click **"New Project"**
+3. Select your GitHub repository
+4. Click **"Import"**
+5. Vercel will auto-detect settings - click **"Deploy"**
+
+**That's it!** Your app is now live on a Vercel URL like:
+```
+https://bulk-volume-calculator.vercel.app
+```
+
+### Step 3: Use Your Custom Domain (Optional)
+1. In Vercel Dashboard, go to **Settings → Domains**
+2. Add your custom domain
+3. Update DNS settings at your domain provider
+
+### How to Access on Mobile:
+- From your phone, visit your Vercel URL
+- App works perfectly with calculations on mobile
+- No installation needed - just open in browser
+
+### Environment Variables on Vercel:
+The app uses `process.env.PORT` for serverless compatibility. No additional env variables needed for this app.
+
+### Redeploy After Changes:
+```bash
+git add .
+git commit -m "Update description"
+git push origin main
+```
+Vercel automatically redeploys on every push!
+
 ## How to Use
 
 ### Step 1: Enter Data
