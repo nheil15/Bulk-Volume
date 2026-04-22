@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Conversion Functions
 function convertMapAreaToAcres(areaInch2, mapScale) {
