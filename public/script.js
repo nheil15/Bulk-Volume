@@ -17,7 +17,6 @@ let inputTable;
 let calculatorForm;
 let mapScaleInput;
 let porosityInput;
-let waterSatInput;
 let boiFactorInput;
 
 // Initialize DOM elements after page load
@@ -30,7 +29,6 @@ function initializeDOMElements() {
     calculatorForm = document.getElementById('calculatorForm');
     mapScaleInput = document.getElementById('mapScale');
     porosityInput = document.getElementById('porosity');
-    waterSatInput = document.getElementById('waterSat');
     boiFactorInput = document.getElementById('boiFactor');
 }
 
@@ -55,10 +53,9 @@ const createHiddenCheckboxes = () => {
 function areAllReservoirFieldsEmpty() {
     const mapScaleValue = mapScaleInput?.value?.trim() || '';
     const porosityValue = porosityInput?.value?.trim() || '';
-    const waterSatValue = waterSatInput?.value?.trim() || '';
     const boiFactorValue = boiFactorInput?.value?.trim() || '';
     
-    return !mapScaleValue && !porosityValue && !waterSatValue && !boiFactorValue;
+    return !mapScaleValue && !porosityValue && !boiFactorValue;
 }
 
 // Update the compute button disabled state
@@ -265,7 +262,7 @@ function calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, zon
 }
 
 // Client-side fallback calculation using per-contour zone selections
-function calculateClientSide(areas, spacing, mapScale, porosity, waterSat, boi, bgi, gocLevel, hGOC, hBottom, oilSatOil, gasSatGas, oilSatGas) {
+function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLevel, hGOC, hBottom, oilSatOil, gasSatGas, oilSatGas) {
     // Ensure zoneSelections exist
     if (!zoneSelections || zoneSelections.length === 0) {
         // If no zone selections, treat all as oil
@@ -397,12 +394,6 @@ async function compute() {
         errors.push('Porosity must be between 0 and 100 %');
     }
     
-    // Validate water saturation
-    const waterSatInput = document.getElementById('waterSat');
-    if (!waterSatInput.value || parseFloat(waterSatInput.value) < 0 || parseFloat(waterSatInput.value) > 100) {
-        errors.push('Water Saturation must be between 0 and 100 %');
-    }
-    
     // Validate Boi factor (required for oil calculation)
     const boiInput = document.getElementById('boiFactor');
     if (!boiInput.value || parseFloat(boiInput.value) <= 0) {
@@ -438,7 +429,6 @@ async function compute() {
     // Get reservoir properties
     const mapScale = parseFloat(mapScaleInput.value);
     const porosity = parseFloat(porosityInput.value) / 100;
-    const waterSaturation = parseFloat(waterSatInput.value) / 100;
     const boiFactor = parseFloat(boiInput.value);
     const spacing = parseFloat(spacingInput.value);
     
@@ -465,7 +455,6 @@ async function compute() {
             spacing, 
             mapScale, 
             porosity, 
-            waterSaturation, 
             boiFactor,
             bgiFactor,
             gocLevel,
@@ -1102,17 +1091,12 @@ window.addEventListener('load', () => {
         resetResults();
         updateComputeButtonState();
     });
-    document.getElementById('waterSat')?.addEventListener('change', () => {
-        resetResults();
-        updateComputeButtonState();
-    });
     document.getElementById('boiFactor')?.addEventListener('change', () => {
         resetResults();
         updateComputeButtonState();
     });
     document.getElementById('mapScale')?.addEventListener('input', updateComputeButtonState);
     document.getElementById('porosity')?.addEventListener('input', updateComputeButtonState);
-    document.getElementById('waterSat')?.addEventListener('input', updateComputeButtonState);
     document.getElementById('boiFactor')?.addEventListener('input', updateComputeButtonState);
     document.getElementById('boiFactor')?.addEventListener('change', resetResults);
     document.getElementById('partialHeight')?.addEventListener('change', resetResults);
