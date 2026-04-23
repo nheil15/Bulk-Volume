@@ -7,6 +7,18 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json());
+
+// Cache control middleware for CSS and JS files
+app.use((req, res, next) => {
+  if (req.url.endsWith('.css') || req.url.endsWith('.js')) {
+    // Don't cache CSS and JS files during development
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Conversion Functions

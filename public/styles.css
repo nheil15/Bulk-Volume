@@ -392,6 +392,13 @@ body {
     border-bottom: 1px solid #e5e5e5;
 }
 
+/* Override text-align for table cells containing centered inputs */
+.data-table td:has(.cl-input),
+.data-table td:has(.area-input) {
+    text-align: center !important;
+    padding: 3px 2px !important;
+}
+
 .data-table th {
     background: #f5f5f5;
     font-weight: 600;
@@ -414,11 +421,14 @@ body {
     border-radius: 3px;
     font-size: 0.85em;
     font-family: inherit;
+    text-align: center !important;
+    direction: ltr;
 }
 
 /* Remove spinner arrows from table number inputs */
 .table-input[type="number"] {
     -moz-appearance: textfield;
+    text-align: center !important;
 }
 
 .table-input[type="number"]::-webkit-outer-spin-button,
@@ -431,6 +441,24 @@ body {
     outline: none;
     border-color: #2196f3;
     box-shadow: 0 0 3px rgba(33, 150, 243, 0.3);
+    text-align: center !important;
+}
+
+.cl-input {
+    text-align: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.area-input {
+    text-align: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Ensure table cells containing inputs are centered */
+.data-table td {
+    text-align: center !important;
 }
 
 .zone-select {

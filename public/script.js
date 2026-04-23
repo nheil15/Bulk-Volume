@@ -498,7 +498,7 @@ function displayResults(results) {
     // Reset modal header to normal (in case error was shown)
     const modalHeader = document.querySelector('.modal-header h2');
     if (modalHeader) {
-        modalHeader.textContent = 'Calculation Results';
+        modalHeader.textContent = 'Results';
     }
     
     // Build modal content
@@ -507,10 +507,10 @@ function displayResults(results) {
     // Show calculation results
     const calc = results.calculations.trapezoidal;
     if (calc) {
-        let bvOilStr = typeof calc.bulkVolume === 'number' ? calc.bulkVolume.toFixed(2) : 'N/A';
-        let bvGasStr = typeof calc.bulkVolumeGas === 'number' && calc.bulkVolumeGas > 0 ? calc.bulkVolumeGas.toFixed(2) : 'N/A';
-        let ooipStr = typeof calc.ooip === 'number' ? calc.ooip.toFixed(2) : (calc.ooip === 'N/A' ? 'N/A' : 'N/A');
-        let ogipStr = typeof calc.ogip === 'number' ? calc.ogip.toFixed(2) : (calc.ogip === 'N/A' ? 'N/A' : 'N/A');
+        let bvOilStr = typeof calc.bulkVolume === 'number' ? Math.round(calc.bulkVolume).toString() + ' acre-ft' : 'N/A';
+        let bvGasStr = typeof calc.bulkVolumeGas === 'number' && calc.bulkVolumeGas > 0 ? Math.round(calc.bulkVolumeGas).toString() + ' acre-ft' : 'N/A';
+        let ooipStr = typeof calc.ooip === 'number' ? Math.round(calc.ooip).toString() + ' MMSTB' : (calc.ooip === 'N/A' ? 'N/A' : 'N/A');
+        let ogipStr = typeof calc.ogip === 'number' ? Math.round(calc.ogip).toString() + ' MMSCF' : (calc.ogip === 'N/A' ? 'N/A' : 'N/A');
         
         modalContent += `
             <div class="results-table-wrapper">
@@ -518,9 +518,9 @@ function displayResults(results) {
                     <thead>
                         <tr>
                             <th>Section</th>
-                            <th>Bulk Volume (acre-ft)</th>
-                            <th>OOIP (MMSTB)</th>
-                            <th>OGIP (MMSCF)</th>
+                            <th>Bulk Volume</th>
+                            <th>OOIP</th>
+                            <th>OGIP</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -922,7 +922,8 @@ function displayInputTable() {
                            data-index="${i}" 
                            value="${cl.toFixed ? Math.round(cl) : cl}" 
                            step="1" 
-                           min="0">
+                           min="0"
+                           style="text-align: center;">
                 </td>
                 <td style="text-align: center;">
                     <select class="zone-select" data-index="${i}">
@@ -937,7 +938,8 @@ function displayInputTable() {
                            placeholder="e.g., 10"
                            ${areaValueAttr}
                            step="any"
-                           min="0">
+                           min="0"
+                           style="text-align: center;">
                 </td>
                 <td style="text-align: center;">
                     <button class="delete-btn" data-index="${i}" title="Delete row">✕</button>
@@ -951,6 +953,31 @@ function displayInputTable() {
     `;
     
     inputTable.innerHTML = html;
+    
+    // Immediately apply center alignment to all input fields and their parent cells
+    setTimeout(() => {
+        document.querySelectorAll('.cl-input').forEach(input => {
+            input.style.textAlign = 'center';
+            input.style.paddingLeft = '0';
+            input.style.paddingRight = '0';
+            // Center the cell itself
+            const td = input.parentElement;
+            if (td) {
+                td.style.textAlign = 'center';
+            }
+        });
+        
+        document.querySelectorAll('.area-input').forEach(input => {
+            input.style.textAlign = 'center';
+            input.style.paddingLeft = '0';
+            input.style.paddingRight = '0';
+            // Center the cell itself
+            const td = input.parentElement;
+            if (td) {
+                td.style.textAlign = 'center';
+            }
+        });
+    }, 0);
     
     // Add event listeners to C.L inputs
     document.querySelectorAll('.cl-input').forEach(input => {
