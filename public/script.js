@@ -504,16 +504,6 @@ function displayResults(results) {
     // Build modal content
     let modalContent = '';
     
-    // Show GOC info if present
-    if (results.hasGOC) {
-        modalContent += `
-            <div class="goc-info" style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
-                <strong style="color: #856404;">Gas-Oil Contact (GOC)</strong><br>
-                <strong>GOC at CL:</strong> ${results.gocLevel}
-            </div>
-        `;
-    }
-    
     // Show calculation results
     const calc = results.calculations.trapezoidal;
     if (calc) {
@@ -589,8 +579,8 @@ function generateIntervalAnalysisTable() {
         const method = isValidRatio ? 'Use Pyramidal' : 'Use Trapezoidal';
         const methodColor = isValidRatio ? '#28a745' : '#007bff';
         
-        const cl1 = contourLines[i] !== undefined ? contourLines[i].toFixed(2) : i;
-        const cl2 = contourLines[i + 1] !== undefined ? contourLines[i + 1].toFixed(2) : (i + 1);
+        const cl1 = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
+        const cl2 = contourLines[i + 1] !== undefined ? Math.round(contourLines[i + 1]) : (i + 1);
         
         // Determine zone from user selections
         const selectedZone = zoneSelections[i] || 'oil';
