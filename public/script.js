@@ -567,7 +567,7 @@ function displayResults(results) {
 function generateIntervalAnalysisTable() {
     if (crossSections.length < 2) return '';
     
-    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis - Method Selection</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level Interval</th><th>Zone</th><th>A<sub>n</sub>/A<sub>n-1</sub></th><th>Ā<sub>n</sub>/Ā<sub>n-1</sub> ≤ 0.5</th><th>Interpretation</th></tr></thead><tbody>';
+    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level Interval</th><th>Zone</th><th>A<sub>n</sub>/A<sub>n-1</sub></th><th>Ā<sub>n</sub>/Ā<sub>n-1</sub> ≤ 0.5</th><th>Interpretation</th></tr></thead><tbody>';
     
     for (let i = 0; i < crossSections.length - 1; i++) {
         const an = crossSections[i];

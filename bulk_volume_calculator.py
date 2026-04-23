@@ -7,7 +7,7 @@ from scipy import integrate
 st.set_page_config(page_title="Bulk Volume Calculator", layout="wide")
 
 st.title("📦 Bulk Volume Calculator")
-st.write("Calculate volume using Trapezoidal, Pyramid (Simpson's 1/3), and Simpson's 3/8 methods")
+st.write("Calculate volume using Simpson's, Trapezoidal, Pyramidal, and Simpson's 3/8 methods")
 
 # Sidebar for input method selection
 st.sidebar.header("Input Method")
@@ -23,51 +23,110 @@ if "heights" not in st.session_state:
     st.session_state.heights = []
 
 def trapezoidal_rule(heights, cross_sections):
-    """Calculate volume using Trapezoidal Rule"""
+    """
+    Calculate volume using Trapezoidal Rule
+    Formula: V = (h/2) × [A₀ + 2A₁ + 2A₂ + ... + 2Aₙ₋₁ + Aₙ]
+    """
     if len(cross_sections) < 2:
         return None
-    total = 0
-    for i in range(len(cross_sections) - 1):
-        total += (cross_sections[i] + cross_sections[i + 1]) / 2 * heights[i]
-    return total
+    
+    h = heights[0] if len(set(heights)) == 1 else np.mean(heights)
+    total = cross_sections[0] + cross_sections[-1]
+    
+    # Add 2 times the intermediate sections
+    for i in range(1, len(cross_sections) - 1):
+        total += 2 * cross_sections[i]
+    
+    return (h / 2) * total
+
 
 def pyramid_rule(heights, cross_sections):
-    """Calculate volume using Pyramid Rule (Simpson's 1/3)"""
+    """
+    Calculate volume using Pyramid Rule (Simpson's 1/3)
+    Formula: V = (h/3) × [A₀ + 4A₁ + 2A₂ + 4A₃ + ... + 2Aₙ₋₂ + 4Aₙ₋₁ + Aₙ]
+    Requires: Odd number of cross-sections
+    """
     if len(cross_sections) < 3:
         return None
     if len(cross_sections) % 2 == 0:
         return None  # Need odd number of sections
     
-    h = heights[0]  # Assuming equal heights
+    h = heights[0] if len(set(heights)) == 1 else np.mean(heights)
     total = cross_sections[0] + cross_sections[-1]
     
-    # Add 4 times the odd-indexed sections
+    # Odd-indexed sections multiply by 4
     for i in range(1, len(cross_sections) - 1, 2):
         total += 4 * cross_sections[i]
     
-    # Add 2 times the even-indexed sections
+    # Even-indexed sections (excluding first and last) multiply by 2
     for i in range(2, len(cross_sections) - 1, 2):
         total += 2 * cross_sections[i]
     
     return (h / 3) * total
 
+
+def simpsons_13_rule(heights, cross_sections):
+    """
+    Calculate volume using Simpson's 1/3 Rule (also known as Simpson's Rule)
+    Same as Pyramid Rule - requires odd number of sections
+    Formula: V = (h/3) × [A₀ + 4A₁ + 2A₂ + 4A₃ + ... + 2Aₙ₋₂ + 4Aₙ₋₁ + Aₙ]
+    """
+    return pyramid_rule(heights, cross_sections)
+
+
 def simpsons_38_rule(heights, cross_sections):
-    """Calculate volume using Simpson's 3/8 Rule"""
+    """
+    Calculate volume using Simpson's 3/8 Rule
+    Formula: V = (3h/8) × [A₀ + 3A₁ + 3A₂ + 2A₃ + 3A₄ + 3A₅ + 2A₆ + ...]
+    Requires: Number of intervals divisible by 3
+    """
     if len(cross_sections) < 4:
+        return None
+    
+    h = heights[0] if len(set(heights)) == 1 else np.mean(heights)
+    n = len(cross_sections) - 1
+    
+    # Check if number of intervals is divisible by 3
+    if n % 3 != 0:
+        # Fall back to combining Simpson's 3/8 and Simpson's 1/3
+        # Use Simpson's 3/8 for complete groups of 3, then handle remainder
+        pass
+    
+    total = 0
+    # Process in groups of 3 intervals
+    for i in range(0, len(cross_sections) - 3, 3):
+        total += (3 * h / 8) * (cross_sections[i] + 3 * cross_sections[i + 1] + 
+                                3 * cross_sections[i + 2] + cross_sections[i + 3])
+    
+    # Handle remaining sections
+    remainder = (len(cross_sections) - 1) % 3
+    if remainder == 1:
+        # One section left, use trapezoidal
+        total += (h / 2) * (cross_sections[-2] + cross_sections[-1])
+    elif remainder == 2:
+        # Two sections left, use Simpson's 1/3
+        total += (h / 3) * (cross_sections[-3] + 4 * cross_sections[-2] + cross_sections[-1])
+    
+    return total
+
+
+def pyramidal_rule(heights, cross_sections):
+    """
+    Calculate volume using Pyramidal Method
+    Uses pyramid/cone approximation for each section
+    Formula: V = (h/3) × (A₀ + √(A₀×A₁) + A₁) + (h/3) × (A₁ + √(A₁×A₂) + A₂) + ...
+    """
+    if len(cross_sections) < 2:
         return None
     
     h = heights[0] if len(set(heights)) == 1 else np.mean(heights)
     total = 0
     
-    # Simpson's 3/8 requires number of intervals divisible by 3
-    n = len(cross_sections) - 1
-    if n % 3 != 0:
-        # Use composite Simpson's 3/8
-        pass
-    
-    for i in range(0, len(cross_sections) - 3, 3):
-        total += (3 * h / 8) * (cross_sections[i] + 3 * cross_sections[i + 1] + 
-                                3 * cross_sections[i + 2] + cross_sections[i + 3])
+    for i in range(len(cross_sections) - 1):
+        # Pyramidal approximation between consecutive sections
+        A_i = cross_sections[i]
+        A_i1 = cross_sections[i + 1]
+        total += (h / 3) * (A_i + np.sqrt(A_i * A_i1) + A_i1)
     
     return total
 
@@ -124,24 +183,29 @@ if len(st.session_state.cross_sections) > 0:
     
     # Calculate volumes
     vol_trap = trapezoidal_rule(heights, cross_sections)
-    vol_pyramid = pyramid_rule(heights, cross_sections) if len(cross_sections) % 2 == 1 else None
-    vol_simpson = simpsons_38_rule(heights, cross_sections)
+    vol_simpson = simpsons_13_rule(heights, cross_sections)
+    vol_simpson_38 = simpsons_38_rule(heights, cross_sections)
+    vol_pyramidal = pyramidal_rule(heights, cross_sections)
     
     # Results Table
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     results = []
     if vol_trap is not None:
         results.append({"Method": "Trapezoidal Rule", "Volume (m³)": f"{vol_trap:.2f}"})
-        col1.metric("Trapezoidal Rule", f"{vol_trap:.2f} m³", delta=None)
-    
-    if vol_pyramid is not None:
-        results.append({"Method": "Pyramid Rule (Simpson's 1/3)", "Volume (m³)": f"{vol_pyramid:.2f}"})
-        col2.metric("Pyramid Rule", f"{vol_pyramid:.2f} m³", delta=None)
+        col1.metric("Trapezoidal", f"{vol_trap:.2f} m³", delta=None)
     
     if vol_simpson is not None:
-        results.append({"Method": "Simpson's 3/8 Rule", "Volume (m³)": f"{vol_simpson:.2f}"})
-        col3.metric("Simpson's 3/8 Rule", f"{vol_simpson:.2f} m³", delta=None)
+        results.append({"Method": "Simpson's 1/3 Rule", "Volume (m³)": f"{vol_simpson:.2f}"})
+        col2.metric("Simpson's 1/3", f"{vol_simpson:.2f} m³", delta=None)
+    
+    if vol_simpson_38 is not None:
+        results.append({"Method": "Simpson's 3/8 Rule", "Volume (m³)": f"{vol_simpson_38:.2f}"})
+        col3.metric("Simpson's 3/8", f"{vol_simpson_38:.2f} m³", delta=None)
+    
+    if vol_pyramidal is not None:
+        results.append({"Method": "Pyramidal Rule", "Volume (m³)": f"{vol_pyramidal:.2f}"})
+        col4.metric("Pyramidal", f"{vol_pyramidal:.2f} m³", delta=None)
     
     # Detailed Results Table
     st.subheader("📈 Results Summary")
@@ -171,17 +235,21 @@ if len(st.session_state.cross_sections) > 0:
             methods.append("Trapezoidal")
             volumes.append(vol_trap)
             colors_list.append('#1f77b4')
-        if vol_pyramid is not None:
-            methods.append("Pyramid")
-            volumes.append(vol_pyramid)
-            colors_list.append('#ff7f0e')
         if vol_simpson is not None:
-            methods.append("Simpson's 3/8")
+            methods.append("Simpson's 1/3")
             volumes.append(vol_simpson)
+            colors_list.append('#ff7f0e')
+        if vol_simpson_38 is not None:
+            methods.append("Simpson's 3/8")
+            volumes.append(vol_simpson_38)
             colors_list.append('#2ca02c')
+        if vol_pyramidal is not None:
+            methods.append("Pyramidal")
+            volumes.append(vol_pyramidal)
+            colors_list.append('#d62728')
         
         if methods:
-            fig, ax = plt.subplots(figsize=(10, 5))
+            fig, ax = plt.subplots(figsize=(12, 5))
             bars = ax.bar(methods, volumes, color=colors_list, edgecolor='black', alpha=0.8)
             ax.set_ylabel('Volume (m³)', fontsize=12)
             ax.set_title('Volume Comparison - Different Methods', fontsize=14, fontweight='bold')
@@ -220,44 +288,75 @@ if len(st.session_state.cross_sections) > 0:
     
     # Method Explanations
     with st.expander("📚 Learn About the Methods"):
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("Trapezoidal Rule")
             st.write("""
-            Uses trapezoids to approximate the area under a curve.
+            Uses trapezoids to approximate volume between sections.
             
-            Formula:
-            V = (h/2) × [A₀ + 2A₁ + 2A₂ + ... + Aₙ]
+            **Formula:**
+            V = (h/2) × [A₀ + 2A₁ + 2A₂ + ... + 2Aₙ₋₁ + Aₙ]
+            
+            **When to use:**
+            - Simple approximation
+            - Linear variation between sections
             
             **Pros:** Simple and fast
             **Cons:** Less accurate for curved surfaces
             """)
         
         with col2:
-            st.subheader("Pyramid Rule (Simpson's 1/3)")
+            st.subheader("Simpson's 1/3 Rule")
             st.write("""
-            Uses parabolic sections for better approximation.
-            Requires odd number of sections.
+            Uses parabolic sections for accurate approximation.
+            Uses different coefficients for odd and even positions.
             
-            Formula:
-            V = (h/3) × [A₀ + 4A₁ + 2A₂ + 4A₃ + ... + Aₙ]
+            **Formula:**
+            V = (h/3) × [A₀ + 4A₁ + 2A₂ + 4A₃ + ... + 2Aₙ₋₂ + 4Aₙ₋₁ + Aₙ]
+            
+            **Requirements:**
+            - Odd number of cross-sections
+            - Uniform spacing (h) between sections
             
             **Pros:** More accurate than trapezoidal
-            **Cons:** Needs odd number of sections
+            **Cons:** Requires odd number of sections
             """)
+        
+        col3, col4 = st.columns(2)
         
         with col3:
             st.subheader("Simpson's 3/8 Rule")
             st.write("""
             Uses cubic polynomials for highest accuracy.
-            Most accurate for smooth curves.
+            Most accurate for smooth curves and variations.
             
-            Formula:
+            **Formula:**
             V = (3h/8) × [A₀ + 3A₁ + 3A₂ + 2A₃ + ...]
             
-            **Pros:** Most accurate
-            **Cons:** More complex calculation
+            **Requirements:**
+            - Number of intervals divisible by 3
+            - Uniform spacing between sections
+            
+            **Pros:** Most accurate for smooth variations
+            **Cons:** Requires specific number of sections
+            """)
+        
+        with col4:
+            st.subheader("Pyramidal Rule")
+            st.write("""
+            Uses pyramid/cone approximation between sections.
+            Accounts for geometric mean between consecutive areas.
+            
+            **Formula:**
+            V = Σ (h/3) × [Aᵢ + √(Aᵢ×Aᵢ₊₁) + Aᵢ₊₁]
+            
+            **When to use:**
+            - Conical or pyramidal shapes
+            - When geometric transition matters
+            
+            **Pros:** Mathematically precise for pyramidal shapes
+            **Cons:** More computation required
             """)
 
 else:
