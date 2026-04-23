@@ -1034,6 +1034,8 @@ body {
 
     .data-table-wrapper {
         margin-top: 8px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .data-table-wrapper h3 {
@@ -1043,6 +1045,27 @@ body {
 
     .data-table {
         font-size: 0.9em;
+        width: 100%;
+    }
+
+    .data-table th,
+    .data-table td {
+        text-align: center !important;
+        padding: 8px 4px;
+    }
+
+    .data-table td:has(.cl-input),
+    .data-table td:has(.area-input),
+    .data-table td:has(.zone-select) {
+        text-align: center !important;
+    }
+
+    .table-input,
+    .zone-select {
+        text-align: center !important;
+        width: 100%;
+        display: block;
+        margin: 0 auto;
     }
 
     .action-btn {
@@ -1246,29 +1269,55 @@ body {
         margin-top: 12px;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+        width: 100%;
     }
 
     .data-table {
         font-size: 0.8em;
         min-width: 100%;
+        width: 100%;
     }
 
     .data-table th,
     .data-table td {
-        padding: 8px 6px;
-        white-space: nowrap;
+        padding: 10px 6px;
+        text-align: center !important;
+        white-space: normal;
+        vertical-align: middle;
+    }
+
+    .data-table th {
+        font-size: 0.85em;
+        padding: 10px 4px;
+    }
+
+    .data-table td:has(.cl-input),
+    .data-table td:has(.area-input),
+    .data-table td:has(.zone-select) {
+        text-align: center !important;
+        padding: 8px 4px !important;
     }
 
     .table-input,
     .zone-select {
         min-height: 40px;
         font-size: 16px;
-        padding: 8px;
+        padding: 10px 8px;
+        width: 100%;
+        text-align: center !important;
+        display: block;
+        margin: 0 auto;
+    }
+
+    .table-input {
+        box-sizing: border-box;
     }
 
     .delete-btn {
         min-height: 40px;
-        padding: 8px;
+        padding: 8px 4px;
+        width: 100%;
+        text-align: center;
     }
 
     .chat-content {

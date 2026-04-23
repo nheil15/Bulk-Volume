@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bulk-volume-calculator-v2';
+const CACHE_NAME = 'bulk-volume-calculator-v3';
 const urlsToCache = [
   '/',
   '/index.html',
