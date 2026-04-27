@@ -247,7 +247,7 @@ function calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, zon
         
         // Select method based on area ratio
         if (ratio <= 0.5) {
-            // Use Pyramidal/Frustum method: BV = (h/3) × [A_i + A_{i+1} + √(A_i × A_{i+1})]
+            // Use Pyramidal method: BV = (h/3) × [A_i + A_{i+1} + √(A_i × A_{i+1})]
             const geometricMean = Math.sqrt(a_n * a_n1);
             intervalBV = (h / 3) * (a_n + a_n1 + geometricMean);
         } else {
@@ -507,10 +507,10 @@ function displayResults(results) {
     // Show calculation results
     const calc = results.calculations.trapezoidal;
     if (calc) {
-        let bvOilStr = typeof calc.bulkVolume === 'number' ? Math.round(calc.bulkVolume).toString() + ' acre-ft' : 'N/A';
-        let bvGasStr = typeof calc.bulkVolumeGas === 'number' && calc.bulkVolumeGas > 0 ? Math.round(calc.bulkVolumeGas).toString() + ' acre-ft' : 'N/A';
-        let ooipStr = typeof calc.ooip === 'number' ? Math.round(calc.ooip).toString() + ' MMSTB' : (calc.ooip === 'N/A' ? 'N/A' : 'N/A');
-        let ogipStr = typeof calc.ogip === 'number' ? Math.round(calc.ogip).toString() + ' MMSCF' : (calc.ogip === 'N/A' ? 'N/A' : 'N/A');
+        let bvOilStr = typeof calc.bulkVolume === 'number' ? calc.bulkVolume.toFixed(2) + ' acre-ft' : 'N/A';
+        let bvGasStr = typeof calc.bulkVolumeGas === 'number' && calc.bulkVolumeGas > 0 ? calc.bulkVolumeGas.toFixed(2) + ' acre-ft' : 'N/A';
+        let ooipStr = typeof calc.ooip === 'number' ? calc.ooip.toFixed(2) + ' MMSTB' : (calc.ooip === 'N/A' ? 'N/A' : 'N/A');
+        let ogipStr = typeof calc.ogip === 'number' ? calc.ogip.toFixed(2) + ' MMSCF' : (calc.ogip === 'N/A' ? 'N/A' : 'N/A');
         
         modalContent += `
             <div class="results-table-wrapper">
@@ -564,6 +564,14 @@ function displayResults(results) {
 }
 
 // Generate interval analysis table for method selection
+function buildInterpretationBadge(label, color) {
+    return `
+        <span class="method-interpretation">
+            <span class="method-label" style="color: ${color};">${label}</span>
+        </span>
+    `;
+}
+
 function generateIntervalAnalysisTable() {
     if (crossSections.length < 2) return '';
     
@@ -576,11 +584,10 @@ function generateIntervalAnalysisTable() {
         
         // Check if the ratio is ≤ 0.5
         const isValidRatio = ratio <= 0.5;
-        const method = isValidRatio ? 'Use Pyramidal' : 'Use Trapezoidal';
-        const methodColor = isValidRatio ? '#28a745' : '#007bff';
-        
         const cl1 = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
         const cl2 = contourLines[i + 1] !== undefined ? Math.round(contourLines[i + 1]) : (i + 1);
+        const method = isValidRatio ? 'Pyramidal' : 'Trapezoidal';
+        const methodColor = isValidRatio ? '#28a745' : '#007bff';
         
         // Determine zone from user selections
         const selectedZone = zoneSelections[i] || 'oil';
@@ -593,7 +600,7 @@ function generateIntervalAnalysisTable() {
                 <td style="color: ${zoneColor}; font-weight: bold;">${zone}</td>
                 <td>${ratio.toFixed(2)}</td>
                 <td style="text-align: center; color: ${isValidRatio ? '#28a745' : '#999'};">${isValidRatio ? '✓ Yes' : 'No'}</td>
-                <td style="color: ${methodColor}; font-weight: bold;">${method}</td>
+                <td>${buildInterpretationBadge(method, methodColor)}</td>
             </tr>
         `;
     }
@@ -724,13 +731,14 @@ function displayAnalysisTable() {
         
         const cl1 = contourLines[i - 1] || (i - 1) * spacing;
         const cl2 = contourLines[i] || i * spacing;
+        const method = meetsCondition ? 'Pyramidal' : 'Trapezoidal';
         
         html += `
             <tr>
                 <td>${cl1.toFixed(0)} - ${cl2.toFixed(0)}</td>
                 <td>${ratio.toFixed(2)}</td>
                 <td>${meetsCondition ? '<span style="color: #27ae60; font-weight: bold;">Yes</span>' : '<span style="color: #e74c3c; font-weight: bold;">No</span>'}</td>
-                <td>${meetsCondition ? 'Use Pyramid' : 'Use Trapezoidal'}</td>
+                <td>${buildInterpretationBadge(method, meetsCondition ? '#27ae60' : '#007bff')}</td>
             </tr>
         `;
     }

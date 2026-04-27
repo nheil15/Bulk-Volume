@@ -6,6 +6,7 @@
 
 /* Remove spinner arrows from all number inputs */
 input[type="number"] {
+    appearance: textfield;
     -moz-appearance: textfield;
 }
 
@@ -309,6 +310,7 @@ body {
 
 /* Remove spinner arrows from number inputs */
 .form-group input[type="number"] {
+    appearance: textfield;
     -moz-appearance: textfield;
 }
 
@@ -427,6 +429,7 @@ body {
 
 /* Remove spinner arrows from table number inputs */
 .table-input[type="number"] {
+    appearance: textfield;
     -moz-appearance: textfield;
     text-align: center !important;
 }
@@ -927,6 +930,17 @@ body {
 }
 
 /* Animations */
+.method-interpretation {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+.method-label {
+    font-weight: 700;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;
