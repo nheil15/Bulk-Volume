@@ -261,6 +261,41 @@ function calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, zon
     return totalBV;
 }
 
+// True Simpson bulk volume using Simpson's 1/3 rule on filtered points
+function calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, zoneName) {
+    if (!areas || areas.length < 3) return 0;
+
+    // Filter by zone
+    let filteredAreas = [];
+    let filteredLevels = [];
+
+    for (let i = 0; i < areas.length; i++) {
+        if (!zoneSelections || zoneSelections[i] === zoneName) {
+            filteredAreas.push(areas[i]);
+            filteredLevels.push(contourLevels[i]);
+        }
+    }
+
+    const n = filteredAreas.length;
+
+    // Simpson requires ODD number of points
+    if (n < 3 || n % 2 === 0) return 0;
+
+    const d = filteredLevels[1] - filteredLevels[0];
+
+    let sum = filteredAreas[0] + filteredAreas[n - 1];
+
+    for (let i = 1; i < n - 1; i++) {
+        if (i % 2 === 1) {
+            sum += 4 * filteredAreas[i];
+        } else {
+            sum += 2 * filteredAreas[i];
+        }
+    }
+
+    return (d / 3) * sum;
+}
+
 // Client-side fallback calculation using per-contour zone selections
 function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLevel, hGOC, hBottom, oilSatOil, gasSatGas, oilSatGas) {
     // Ensure zoneSelections exist
@@ -273,10 +308,60 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
     let oilBV = calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, 'oil');
     let gasBV = calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, 'gas');
     
+    // Check if Simpson should be applied:
+    // Case 1: No GOC - apply to all CLs if odd
+    // Case 2: Has GOC - apply to oil zone CLs if odd (when oil CLs exist before gas)
+    const hasGOC = gocLevel !== null && !isNaN(gocLevel);
+    const isOddCLs = areas.length % 2 === 1; // odd number of points
+    
+    // Count oil and gas zone contour levels
+    let oilCount = 0;
+    let gasCount = 0;
+    for (let i = 0; i < areas.length; i++) {
+        if (!zoneSelections || zoneSelections[i] === 'oil') {
+            oilCount++;
+        } else if (zoneSelections && zoneSelections[i] === 'gas') {
+            gasCount++;
+        }
+    }
+    
+    // Determine if Simpson should be calculated for each zone
+    let shouldCalcSimpsonOil = false;
+    let shouldCalcSimpsonGas = false;
+    
+    if (!hasGOC) {
+        // No GOC: Simpson applies if total CLs are odd
+        shouldCalcSimpsonOil = isOddCLs;
+        shouldCalcSimpsonGas = isOddCLs;
+    } else {
+        // Has GOC: Simpson applies to each zone if that zone's CLs are odd
+        shouldCalcSimpsonOil = oilCount > 0 && oilCount % 2 === 1;
+        shouldCalcSimpsonGas = gasCount > 0 && gasCount % 2 === 1;
+    }
+    
+    const shouldCalculateSimpson = shouldCalcSimpsonOil || shouldCalcSimpsonGas;
+    
+    // Calculate Simpson-only bulk volumes if conditions are met
+    let oilSimpsonBV = 0;
+    let gasSimpsonBV = 0;
+    
+    if (shouldCalculateSimpson) {
+        if (shouldCalcSimpsonOil) {
+            oilSimpsonBV = calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, 'oil');
+        }
+        if (shouldCalcSimpsonGas) {
+            gasSimpsonBV = calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, 'gas');
+        }
+    }
+    
     // Convert BV (in²-ft) to acres using map scale
     // BV in acres = (BV in in²-ft) × (mapScale²) / 6,272,640
     let oilAcres = (oilBV * mapScale * mapScale) / 6272640;
     let gasAcres = (gasBV * mapScale * mapScale) / 6272640;
+    
+    // Convert Simpson BV to acres
+    let oilSimpsonAcres = (oilSimpsonBV * mapScale * mapScale) / 6272640;
+    let gasSimpsonAcres = (gasSimpsonBV * mapScale * mapScale) / 6272640;
     
     // Calculate OOIP (Oil) using Oil Saturation in Oil Zone
     let ooip = 'N/A';
@@ -296,6 +381,20 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
         ogip = ogipSCF / 1000000; // Convert to MMSCF
     }
     
+    // Calculate Simpson OOIP
+    let simpsonOoip = 'N/A';
+    if (boi && boi > 0 && oilSimpsonAcres > 0) {
+        const ooipSTB = 7758 * oilSimpsonAcres * porosity * oilSatOil / boi;
+        simpsonOoip = ooipSTB / 1000000;
+    }
+    
+    // Calculate Simpson OGIP
+    let simpsonOgip = 'N/A';
+    if (bgi && bgi > 0 && gasSimpsonAcres > 0) {
+        const ogipSCF = 43560 * gasSimpsonAcres * porosity * gasSatGas / bgi;
+        simpsonOgip = ogipSCF / 1000000;
+    }
+    
     const result = {
         bulkVolume: oilAcres,
         bulkVolumeGas: gasAcres,
@@ -303,8 +402,22 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
         bulkVolumeGasInches: gasBV,
         ooip: ooip,
         ogip: ogip,
-        hasGOC: gocLevel !== null && !isNaN(gocLevel),
+        hasGOC: hasGOC,
         gocLevel: gocLevel,
+        // Simpson-only results
+        simpsonOilBV: oilSimpsonAcres,
+        simpsonGasBV: gasSimpsonAcres,
+        simpsonOilIntervals: shouldCalcSimpsonOil && oilSimpsonBV > 0 ? 1 : 0,
+        simpsonGasIntervals: shouldCalcSimpsonGas && gasSimpsonBV > 0 ? 1 : 0,
+        simpsonOoip: simpsonOoip,
+        simpsonOgip: simpsonOgip,
+        hasSimpson: shouldCalculateSimpson,
+        shouldCalcSimpsonOil: shouldCalcSimpsonOil,
+        shouldCalcSimpsonGas: shouldCalcSimpsonGas,
+        numCLs: areas.length,
+        oilCLCount: oilCount,
+        gasCLCount: gasCount,
+        isOddCLs: isOddCLs,
         calculations: {
             trapezoidal: {
                 bulkVolume: oilAcres,
@@ -507,13 +620,14 @@ function displayResults(results) {
     // Show calculation results
     const calc = results.calculations.trapezoidal;
     if (calc) {
-        let bvOilStr = typeof calc.bulkVolume === 'number' ? calc.bulkVolume.toFixed(2) + ' acre-ft' : 'N/A';
-        let bvGasStr = typeof calc.bulkVolumeGas === 'number' && calc.bulkVolumeGas > 0 ? calc.bulkVolumeGas.toFixed(2) + ' acre-ft' : 'N/A';
-        let ooipStr = typeof calc.ooip === 'number' ? calc.ooip.toFixed(2) + ' MMSTB' : (calc.ooip === 'N/A' ? 'N/A' : 'N/A');
-        let ogipStr = typeof calc.ogip === 'number' ? calc.ogip.toFixed(2) + ' MMSCF' : (calc.ogip === 'N/A' ? 'N/A' : 'N/A');
+        let bvOilStr = typeof calc.bulkVolume === 'number' ? calc.bulkVolume.toFixed(5) + ' acre-ft' : 'N/A';
+        let bvGasStr = typeof calc.bulkVolumeGas === 'number' && calc.bulkVolumeGas > 0 ? calc.bulkVolumeGas.toFixed(5) + ' acre-ft' : 'N/A';
+        let ooipStr = typeof calc.ooip === 'number' ? calc.ooip.toFixed(5) + ' MMSTB' : (calc.ooip === 'N/A' ? 'N/A' : 'N/A');
+        let ogipStr = typeof calc.ogip === 'number' ? calc.ogip.toFixed(5) + ' MMSCF' : (calc.ogip === 'N/A' ? 'N/A' : 'N/A');
         
         modalContent += `
             <div class="results-table-wrapper">
+                <h3>Bulk Volume</h3>
                 <table class="results-table">
                     <thead>
                         <tr>
@@ -550,8 +664,8 @@ function displayResults(results) {
         `;
     }
     
-    // Add interval analysis table
-    modalContent += generateIntervalAnalysisTable();
+    // Add unified interval analysis table (includes Simpson if applicable)
+    modalContent += generateUnifiedIntervalAnalysisTable();
     
     // Set results content in modal
     document.getElementById('modalResults').innerHTML = modalContent;
@@ -572,7 +686,187 @@ function buildInterpretationBadge(label, color) {
     `;
 }
 
-function generateIntervalAnalysisTable() {
+// Generate unified interval analysis table (combines trapezoidal/pyramidal and Simpson)
+function generateUnifiedIntervalAnalysisTable() {
+    if (crossSections.length < 2) return '';
+    
+    const hasOilSimpson = lastResults && lastResults.shouldCalcSimpsonOil;
+    const hasGasSimpson = lastResults && lastResults.shouldCalcSimpsonGas;
+    const hasSimpson = hasOilSimpson || hasGasSimpson;
+    const hasGOC = lastResults && lastResults.hasGOC;
+    
+    // Case 1: Simpson without GOC - show ONLY Simpson
+    if (hasSimpson && !hasGOC) {
+        return generateSimpsonOnlyTable();
+    }
+    
+    // Case 2: Simpson with GOC - show Simpson AND other methods combined
+    if (hasSimpson && hasGOC) {
+        return generateSimpsonWithMethodsTable();
+    }
+    
+    // Case 3: No Simpson - show trapezoidal/pyramidal interval analysis
+    return generateMethodsOnlyTable();
+}
+
+// Show only Simpson interpretation
+function generateSimpsonOnlyTable() {
+    if (crossSections.length < 3) return '';
+    
+    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis - Simpson\'s Rule</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level</th><th>Zone</th><th>Simpson Weight</th><th>Interpretation</th></tr></thead><tbody>';
+    
+    let oilCLs = [];
+    let gasCLs = [];
+    
+    for (let i = 0; i < crossSections.length; i++) {
+        const selectedZone = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
+        if (selectedZone === 'oil') {
+            oilCLs.push(i);
+        } else {
+            gasCLs.push(i);
+        }
+    }
+    
+    const hasOilSimpson = lastResults && lastResults.shouldCalcSimpsonOil;
+    
+    for (let i = 0; i < crossSections.length; i++) {
+        const cl = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
+        const selectedZone = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
+        const zone = selectedZone.charAt(0).toUpperCase() + selectedZone.slice(1);
+        const zoneColor = selectedZone === 'oil' ? '#1a3a52' : '#dc3545';
+        
+        let weight = '-';
+        let showRow = false;
+        
+        if (selectedZone === 'oil' && hasOilSimpson) {
+            const indexInZone = oilCLs.indexOf(i);
+            if (indexInZone === 0 || indexInZone === oilCLs.length - 1) {
+                weight = '1';
+            } else if (indexInZone % 2 === 1) {
+                weight = '4';
+            } else {
+                weight = '2';
+            }
+            showRow = true;
+        } else if (selectedZone === 'gas' && lastResults.shouldCalcSimpsonGas) {
+            const indexInZone = gasCLs.indexOf(i);
+            if (indexInZone === 0 || indexInZone === gasCLs.length - 1) {
+                weight = '1';
+            } else if (indexInZone % 2 === 1) {
+                weight = '4';
+            } else {
+                weight = '2';
+            }
+            showRow = true;
+        }
+        
+        if (showRow) {
+            const interpretation = 'Simpson\'s Rule';
+            tableHTML += `
+                <tr>
+                    <td>${cl}</td>
+                    <td style="color: ${zoneColor}; font-weight: bold;">${zone}</td>
+                    <td>${weight}</td>
+                    <td>${buildInterpretationBadge(interpretation, '#28a745')}</td>
+                </tr>
+            `;
+        }
+    }
+    
+    tableHTML += '</tbody></table></div>';
+    return tableHTML;
+}
+
+// Show Simpson and other methods combined (with GOC)
+function generateSimpsonWithMethodsTable() {
+    if (crossSections.length < 2) return '';
+    
+    const hasOilSimpson = lastResults && lastResults.shouldCalcSimpsonOil;
+    const hasGasSimpson = lastResults && lastResults.shouldCalcSimpsonGas;
+    
+    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level</th><th>Zone</th><th>A<sub>n</sub>/A<sub>n-1</sub> or Weight</th><th>≤ 0.5 / Method</th><th>Interpretation</th></tr></thead><tbody>';
+    
+    // Determine which zones have Simpson
+    let oilCLs = [];
+    let gasCLs = [];
+    
+    for (let i = 0; i < crossSections.length; i++) {
+        const selectedZone = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
+        if (selectedZone === 'oil') {
+            oilCLs.push(i);
+        } else {
+            gasCLs.push(i);
+        }
+    }
+    
+    // Process oil zone: show Simpson if it applies
+    if (hasOilSimpson) {
+        for (let i = 0; i < crossSections.length; i++) {
+            const selectedZone = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
+            
+            if (selectedZone === 'oil') {
+                const cl = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
+                const indexInZone = oilCLs.indexOf(i);
+                
+                let weight = '-';
+                if (indexInZone === 0 || indexInZone === oilCLs.length - 1) {
+                    weight = '1';
+                } else if (indexInZone % 2 === 1) {
+                    weight = '4';
+                } else {
+                    weight = '2';
+                }
+                
+                const interpretation = 'Simpson\'s Rule';
+                tableHTML += `
+                    <tr>
+                        <td>${cl}</td>
+                        <td style="color: #1a3a52; font-weight: bold;">Oil</td>
+                        <td>${weight}</td>
+                        <td>-</td>
+                        <td>${buildInterpretationBadge(interpretation, '#28a745')}</td>
+                    </tr>
+                `;
+            }
+        }
+    }
+    
+    // Process gas zone: show intervals with methods
+    if (hasGasSimpson || gasCLs.length > 0) {
+        for (let i = 0; i < crossSections.length - 1; i++) {
+            const zone1 = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
+            const zone2 = zoneSelections && zoneSelections[i + 1] ? zoneSelections[i + 1] : 'oil';
+            
+            // Only show gas zone intervals
+            if (zone1 === 'gas' || zone2 === 'gas') {
+                const an = crossSections[i];
+                const an1 = crossSections[i + 1];
+                const ratio = an1 / an;
+                const isValidRatio = ratio <= 0.5;
+                const cl1 = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
+                const cl2 = contourLines[i + 1] !== undefined ? Math.round(contourLines[i + 1]) : (i + 1);
+                const method = isValidRatio ? 'Pyramidal' : 'Trapezoidal';
+                const methodColor = isValidRatio ? '#28a745' : '#007bff';
+                
+                tableHTML += `
+                    <tr>
+                        <td>${cl1}-${cl2}</td>
+                        <td style="color: #dc3545; font-weight: bold;">Gas</td>
+                        <td>${ratio.toFixed(2)}</td>
+                        <td style="text-align: center; color: ${isValidRatio ? '#28a745' : '#999'};">${isValidRatio ? '✓ Yes' : 'No'}</td>
+                        <td>${buildInterpretationBadge(method, methodColor)}</td>
+                    </tr>
+                `;
+            }
+        }
+    }
+    
+    tableHTML += '</tbody></table></div>';
+    return tableHTML;
+}
+
+// Show only trapezoidal/pyramidal methods
+function generateMethodsOnlyTable() {
     if (crossSections.length < 2) return '';
     
     let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level Interval</th><th>Zone</th><th>A<sub>n</sub>/A<sub>n-1</sub></th><th>Ā<sub>n</sub>/Ā<sub>n-1</sub> ≤ 0.5</th><th>Interpretation</th></tr></thead><tbody>';
@@ -581,18 +875,15 @@ function generateIntervalAnalysisTable() {
         const an = crossSections[i];
         const an1 = crossSections[i + 1];
         const ratio = an1 / an;
-        
-        // Check if the ratio is ≤ 0.5
         const isValidRatio = ratio <= 0.5;
         const cl1 = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
         const cl2 = contourLines[i + 1] !== undefined ? Math.round(contourLines[i + 1]) : (i + 1);
         const method = isValidRatio ? 'Pyramidal' : 'Trapezoidal';
         const methodColor = isValidRatio ? '#28a745' : '#007bff';
         
-        // Determine zone from user selections
         const selectedZone = zoneSelections[i] || 'oil';
         const zone = selectedZone.charAt(0).toUpperCase() + selectedZone.slice(1);
-        const zoneColor = selectedZone === 'oil' ? '#1a3a52' : '#dc3545'; // Blue for Oil, Red for Gas
+        const zoneColor = selectedZone === 'oil' ? '#1a3a52' : '#dc3545';
         
         tableHTML += `
             <tr>

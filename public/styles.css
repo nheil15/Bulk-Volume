@@ -597,7 +597,7 @@ body {
 .btn-compute {
     width: 100%;
     padding: 10px;
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    background: #000000;
     color: white;
     border: none;
     font-size: 0.9em;
@@ -609,9 +609,9 @@ body {
 }
 
 .btn-compute:hover:not(:disabled) {
-    background: linear-gradient(135deg, #4a5258 0%, #3d474c 100%);
+    background: #111111;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .btn-compute:disabled {
@@ -822,7 +822,7 @@ body {
 
 .results-table thead,
 .analysis-table thead {
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    background: #000000;
     color: white;
     font-weight: 600;
 }
@@ -833,7 +833,7 @@ body {
     text-align: left;
     font-size: 0.9em;
     white-space: nowrap;
-    border-bottom: 2px solid #6c757d;
+    border-bottom: 2px solid #000000;
 }
 
 .results-table tbody tr,
@@ -889,7 +889,7 @@ body {
 }
 
 .interval-analysis-table thead {
-    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    background: #000000;
     color: white;
     font-weight: 600;
 }
@@ -898,7 +898,7 @@ body {
     padding: 12px 14px;
     text-align: center;
     font-size: 0.85em;
-    border-bottom: 2px solid #6c757d;
+    border-bottom: 2px solid #000000;
 }
 
 .interval-analysis-table th:first-child {
