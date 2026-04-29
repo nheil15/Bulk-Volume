@@ -830,7 +830,7 @@ body {
 .results-table th,
 .analysis-table th {
     padding: 14px;
-    text-align: left;
+    text-align: center;
     font-size: 0.9em;
     white-space: nowrap;
     border-bottom: 2px solid #000000;
@@ -850,7 +850,7 @@ body {
 .results-table td,
 .analysis-table td {
     padding: 12px 14px;
-    text-align: left;
+    text-align: center;
 }
 
 .results-table tbody tr:last-child,
@@ -874,6 +874,39 @@ body {
     margin: 16px 0 8px 0;
     font-size: 1.1em;
     color: #333;
+}
+
+/* Center the heading for results tables */
+.results-table-wrapper h3 {
+    margin: 16px 0 8px 0;
+    font-size: 1.1em;
+    color: #333;
+    text-align: center;
+}
+
+/* Inline form errors shown above compute button */
+.form-errors {
+    margin: 8px 0 0 0;
+    padding: 8px 12px;
+    background: #fff3f2;
+    border: 1px solid #f5c6cb;
+    color: #a94442;
+    font-size: 0.9em;
+    border-radius: 6px;
+}
+
+.form-errors ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.form-errors li {
+    margin-bottom: 6px;
+}
+
+.input-error {
+    outline: 2px solid rgba(220,53,69,0.15);
+    box-shadow: 0 0 0 3px rgba(220,53,69,0.05);
 }
 
 /* Interval analysis table styling */
@@ -902,7 +935,7 @@ body {
 }
 
 .interval-analysis-table th:first-child {
-    text-align: left;
+    text-align: center;
 }
 
 .interval-analysis-table tbody tr {
@@ -920,9 +953,53 @@ body {
 }
 
 .interval-analysis-table td:first-child {
-    text-align: left;
+    text-align: center;
     font-weight: 500;
     color: #333;
+}
+
+.analysis-table-title {
+    margin: 0;
+    text-align: center;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.method-info-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid #1a3a52;
+    background: #ffffff;
+    color: #1a3a52;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    transition: transform 0.2s, background-color 0.2s, color 0.2s;
+}
+
+.method-info-btn:hover {
+    background: #1a3a52;
+    color: #ffffff;
+    transform: scale(1.05);
+}
+
+.method-explanation-content {
+    color: #333;
+    line-height: 1.6;
+}
+
+.method-explanation-content ul {
+    margin: 12px 0 16px 20px;
+    padding: 0;
+}
+
+.method-explanation-content li {
+    margin-bottom: 8px;
 }
 
 .interval-analysis-table tbody tr:last-child {
@@ -935,6 +1012,10 @@ body {
     align-items: center;
     gap: 8px;
     position: relative;
+}
+
+.method-interpretation-inline {
+    justify-content: center;
 }
 
 .method-label {

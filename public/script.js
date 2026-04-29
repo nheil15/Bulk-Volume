@@ -7,6 +7,7 @@ let comparisonChart = null;
 let lastResults = null;
 let selectedFormula = 'trapezoidal';
 let hasResults = false;
+let usedMethodsInCurrentTable = new Set(); // Track which methods are used in the current table
 
 // DOM Elements - will be initialized after page loads
 let spacingInput;
@@ -30,6 +31,23 @@ function initializeDOMElements() {
     mapScaleInput = document.getElementById('mapScale');
     porosityInput = document.getElementById('porosity');
     boiFactorInput = document.getElementById('boiFactor');
+
+    const oilSatOilInput = document.getElementById('oilSatOil');
+    const gasSatGasInput = document.getElementById('gasSatGas');
+    const oilSatGasInput = document.getElementById('oilSatGas');
+
+    if (oilSatOilInput) {
+        oilSatOilInput.autocomplete = 'off';
+        oilSatOilInput.value = '';
+    }
+    if (gasSatGasInput) {
+        gasSatGasInput.autocomplete = 'off';
+        gasSatGasInput.value = '';
+    }
+    if (oilSatGasInput) {
+        oilSatGasInput.autocomplete = 'off';
+        oilSatGasInput.value = '';
+    }
 }
 
 // Helper function to set main input placeholder
@@ -58,12 +76,82 @@ function areAllReservoirFieldsEmpty() {
     return !mapScaleValue && !porosityValue && !boiFactorValue;
 }
 
+// Return an array of missing required field messages (empty if none)
+function getMissingRequiredFields() {
+    const missing = [];
+
+    // Area inputs
+    const areaInputs = Array.from(document.querySelectorAll('.area-input'));
+    if (areaInputs.length === 0) {
+        missing.push('Enter cross-sectional area data in the Input Summary table.');
+    } else {
+        const anyEmpty = areaInputs.some(inp => !inp.value || Number.isNaN(parseFloat(inp.value)));
+        if (anyEmpty) missing.push('All area values in the Input Summary table must be filled with valid numbers.');
+    }
+
+    // Spacing
+    const sp = document.getElementById('spacing');
+    if (!sp || !sp.value || parseFloat(sp.value) <= 0) {
+        missing.push('Provide a valid Contour Interval (spacing).');
+    }
+
+    // Map scale
+    const ms = document.getElementById('mapScale');
+    if (!ms || !ms.value || parseFloat(ms.value) <= 0) {
+        missing.push('Provide a valid Map Scale (1:X).');
+    }
+
+    // Porosity
+    const por = document.getElementById('porosity');
+    if (!por || !por.value || parseFloat(por.value) < 0 || parseFloat(por.value) > 100) {
+        missing.push('Provide Porosity (0-100%).');
+    }
+
+    // Boi
+    const boi = document.getElementById('boiFactor');
+    if (!boi || !boi.value || parseFloat(boi.value) <= 0) {
+        missing.push('Provide Oil Formation Factor (Boi) greater than 0.');
+    }
+
+    // Partial thickness - at least one required
+    const hGOC = document.getElementById('partialHeightGOC');
+    const hBot = document.getElementById('partialHeightBottom');
+    const hasH = (hGOC && hGOC.value) || (hBot && hBot.value);
+    if (!hasH) {
+        missing.push("Specify at least one partial thickness: 'Partial Thickness at GOC' or 'Partial Thickness at Bottom'.");
+    }
+
+    return missing;
+}
+
 // Update the compute button disabled state
 function updateComputeButtonState() {
-    const isDisabled = areAllReservoirFieldsEmpty();
-    if (computeBtn) {
-        computeBtn.disabled = isDisabled;
+    // Do not show live errors while the user is editing. Clear any existing inline errors
+    // and keep the compute button enabled so the user can press Calculate to validate.
+    const formErrors = document.getElementById('formErrors');
+    if (formErrors) {
+        formErrors.innerHTML = '';
     }
+    if (computeBtn) {
+        computeBtn.disabled = false;
+    }
+}
+
+// Render form errors inline (used when user presses Calculate)
+function showFormErrors(missing) {
+    if (!missing || missing.length === 0) return;
+    let formErrors = document.getElementById('formErrors');
+    if (!formErrors) {
+        formErrors = document.createElement('div');
+        formErrors.id = 'formErrors';
+        formErrors.className = 'form-errors';
+        if (computeBtn && computeBtn.parentElement) {
+            computeBtn.parentElement.insertBefore(formErrors, computeBtn);
+        } else if (calculatorForm) {
+            calculatorForm.appendChild(formErrors);
+        }
+    }
+    formErrors.innerHTML = '<ul>' + missing.map(m => `<li>${m}</li>`).join('') + '</ul>';
 }
 
 // Reset results when user changes input
@@ -75,12 +163,44 @@ function resetResults() {
 
 // Handle compute button click - either show results or calculate
 function handleComputeButtonClick(e) {
+    // Validate required fields now (show errors only when user presses Calculate)
+    const missing = getMissingRequiredFields();
+    if (missing.length > 0 && computeBtn.innerHTML !== 'Show Result') {
+        showValidationModal(missing);
+        return;
+    }
+
     if (computeBtn.innerHTML === 'Show Result') {
         // Button is showing "Show Result" - just display the modal
         showResultsModal();
     } else {
         // Button is showing "Calculate" - run the calculation
         compute();
+    }
+}
+
+// Show validation errors in the results modal when Calculate is pressed
+function showValidationModal(missing) {
+    if (!missing || missing.length === 0) return;
+    const modal = document.getElementById('resultsModal');
+    const modalHeader = modal ? modal.querySelector('.modal-header h2') : null;
+    const modalBody = document.getElementById('modalResults');
+
+    if (modalHeader) {
+        modalHeader.textContent = '⚠ Validation Errors';
+    }
+
+    if (modalBody) {
+        modalBody.innerHTML = `
+            <div class="form-errors" style="background:#fff3f2;border-color:#f5c6cb;color:#a94442;">
+                <p>Please provide the following before calculation:</p>
+                <ul>${missing.map(m => `<li>${m}</li>`).join('')}</ul>
+            </div>
+        `;
+    }
+
+    if (modal) {
+        modal.classList.add('active');
     }
 }
 
@@ -261,8 +381,14 @@ function calculateBulkVolumeByInterval(areas, contourLevels, zoneSelections, zon
     return totalBV;
 }
 
-// True Simpson bulk volume using Simpson's 1/3 rule on filtered points
-function calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, zoneName) {
+// Convert a mapped area in square inches to acres using the map scale.
+function convertMapAreaToAcres(areaInSquareInches, mapScale) {
+    return (areaInSquareInches * mapScale * mapScale) / 6272640;
+}
+
+// True Simpson bulk volume using Simpson's 1/3 rule on filtered points.
+// The returned value is in acre-ft.
+function calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, zoneName, mapScale) {
     if (!areas || areas.length < 3) return 0;
 
     // Filter by zone
@@ -282,14 +408,15 @@ function calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, zoneNa
     if (n < 3 || n % 2 === 0) return 0;
 
     const d = filteredLevels[1] - filteredLevels[0];
+    const filteredAcres = filteredAreas.map(area => convertMapAreaToAcres(area, mapScale));
 
-    let sum = filteredAreas[0] + filteredAreas[n - 1];
+    let sum = filteredAcres[0] + filteredAcres[n - 1];
 
     for (let i = 1; i < n - 1; i++) {
         if (i % 2 === 1) {
-            sum += 4 * filteredAreas[i];
+            sum += 4 * filteredAcres[i];
         } else {
-            sum += 2 * filteredAreas[i];
+            sum += 2 * filteredAcres[i];
         }
     }
 
@@ -347,10 +474,10 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
     
     if (shouldCalculateSimpson) {
         if (shouldCalcSimpsonOil) {
-            oilSimpsonBV = calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, 'oil');
+            oilSimpsonBV = calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, 'oil', mapScale);
         }
         if (shouldCalcSimpsonGas) {
-            gasSimpsonBV = calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, 'gas');
+            gasSimpsonBV = calculateSimpsonBulkVolume(areas, contourLevels, zoneSelections, 'gas', mapScale);
         }
     }
     
@@ -358,10 +485,6 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
     // BV in acres = (BV in in²-ft) × (mapScale²) / 6,272,640
     let oilAcres = (oilBV * mapScale * mapScale) / 6272640;
     let gasAcres = (gasBV * mapScale * mapScale) / 6272640;
-    
-    // Convert Simpson BV to acres
-    let oilSimpsonAcres = (oilSimpsonBV * mapScale * mapScale) / 6272640;
-    let gasSimpsonAcres = (gasSimpsonBV * mapScale * mapScale) / 6272640;
     
     // Calculate OOIP (Oil) using Oil Saturation in Oil Zone
     let ooip = 'N/A';
@@ -383,15 +506,15 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
     
     // Calculate Simpson OOIP
     let simpsonOoip = 'N/A';
-    if (boi && boi > 0 && oilSimpsonAcres > 0) {
-        const ooipSTB = 7758 * oilSimpsonAcres * porosity * oilSatOil / boi;
+    if (boi && boi > 0 && oilSimpsonBV > 0) {
+        const ooipSTB = 7758 * oilSimpsonBV * porosity * oilSatOil / boi;
         simpsonOoip = ooipSTB / 1000000;
     }
     
     // Calculate Simpson OGIP
     let simpsonOgip = 'N/A';
-    if (bgi && bgi > 0 && gasSimpsonAcres > 0) {
-        const ogipSCF = 43560 * gasSimpsonAcres * porosity * gasSatGas / bgi;
+    if (bgi && bgi > 0 && gasSimpsonBV > 0) {
+        const ogipSCF = 43560 * gasSimpsonBV * porosity * gasSatGas / bgi;
         simpsonOgip = ogipSCF / 1000000;
     }
     
@@ -405,8 +528,8 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
         hasGOC: hasGOC,
         gocLevel: gocLevel,
         // Simpson-only results
-        simpsonOilBV: oilSimpsonAcres,
-        simpsonGasBV: gasSimpsonAcres,
+        simpsonOilBV: oilSimpsonBV,
+        simpsonGasBV: gasSimpsonBV,
         simpsonOilIntervals: shouldCalcSimpsonOil && oilSimpsonBV > 0 ? 1 : 0,
         simpsonGasIntervals: shouldCalcSimpsonGas && gasSimpsonBV > 0 ? 1 : 0,
         simpsonOoip: simpsonOoip,
@@ -611,7 +734,7 @@ function displayResults(results) {
     // Reset modal header to normal (in case error was shown)
     const modalHeader = document.querySelector('.modal-header h2');
     if (modalHeader) {
-        modalHeader.textContent = 'Results';
+        modalHeader.textContent = 'RESULTS';
     }
     
     // Build modal content
@@ -669,6 +792,7 @@ function displayResults(results) {
     
     // Set results content in modal
     document.getElementById('modalResults').innerHTML = modalContent;
+    bindMethodInfoButtons();
     
     // Change button to "Show Result"
     computeBtn.innerHTML = 'Show Result';
@@ -684,6 +808,40 @@ function buildInterpretationBadge(label, color) {
             <span class="method-label" style="color: ${color};">${label}</span>
         </span>
     `;
+}
+
+function buildMethodBadge(label, color, infoType, showInfo = true) {
+    return `
+        <span class="method-interpretation method-interpretation-inline">
+            <span class="method-label" style="color: ${color};">${label}</span>
+        </span>
+    `;
+}
+
+function buildMethodReason(method, ratio, details) {
+    if (details) {
+        return details;
+    }
+
+    if (method === 'Simpson') {
+        return 'Used because this zone has an odd number of contour points with equal spacing, which satisfies Simpson\'s 1/3 rule.';
+    }
+
+    if (method === 'Pyramidal') {
+        return `Used because A<sub>n</sub>/A<sub>n-1</sub> = ${ratio.toFixed(2)} ≤ 0.5, so the pyramidal rule gives a better fit.`;
+    }
+
+    return `Used because A<sub>n</sub>/A<sub>n-1</sub> = ${ratio.toFixed(2)} > 0.5, so the trapezoidal rule is applied.`;
+}
+
+function buildRatioCheck(ratio) {
+    if (typeof ratio !== 'number' || Number.isNaN(ratio)) {
+        return '-';
+    }
+
+    return ratio >= 0.5
+        ? '<span style="color: #007bff; font-weight: 700;">Yes</span>'
+        : '<span style="color: #28a745; font-weight: 700;">No</span>';
 }
 
 // Generate unified interval analysis table (combines trapezoidal/pyramidal and Simpson)
@@ -713,7 +871,24 @@ function generateUnifiedIntervalAnalysisTable() {
 function generateSimpsonOnlyTable() {
     if (crossSections.length < 3) return '';
     
-    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis - Simpson\'s Rule</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level</th><th>Zone</th><th>Simpson Weight</th><th>Interpretation</th></tr></thead><tbody>';
+    usedMethodsInCurrentTable.clear();
+    usedMethodsInCurrentTable.add('simpson');
+    
+    let tableHTML = `
+        <div class="analysis-table-wrapper" style="margin-top: 24px; overflow-x: auto;">
+            <h3 class="analysis-table-title">Interval Analysis</h3>
+            <table class="interval-analysis-table">
+                <thead>
+                    <tr>
+                        <th>Contour Level</th>
+                        <th>Zone</th>
+                        <th>A<sub>n</sub>/A<sub>n-1</sub></th>
+                        <th>&ge; 0.5</th>
+                        <th>Method Used <button type="button" class="method-info-btn" data-method-info="all-methods-simpson" aria-label="View all methods explanation">i</button></th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
     
     let oilCLs = [];
     let gasCLs = [];
@@ -729,47 +904,39 @@ function generateSimpsonOnlyTable() {
     
     const hasOilSimpson = lastResults && lastResults.shouldCalcSimpsonOil;
     
+    let previousMethodKey = null;
+
     for (let i = 0; i < crossSections.length; i++) {
         const cl = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
         const selectedZone = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
         const zone = selectedZone.charAt(0).toUpperCase() + selectedZone.slice(1);
         const zoneColor = selectedZone === 'oil' ? '#1a3a52' : '#dc3545';
         
-        let weight = '-';
         let showRow = false;
+        let reason = '';
         
         if (selectedZone === 'oil' && hasOilSimpson) {
-            const indexInZone = oilCLs.indexOf(i);
-            if (indexInZone === 0 || indexInZone === oilCLs.length - 1) {
-                weight = '1';
-            } else if (indexInZone % 2 === 1) {
-                weight = '4';
-            } else {
-                weight = '2';
-            }
+            reason = buildMethodReason('Simpson');
             showRow = true;
         } else if (selectedZone === 'gas' && lastResults.shouldCalcSimpsonGas) {
-            const indexInZone = gasCLs.indexOf(i);
-            if (indexInZone === 0 || indexInZone === gasCLs.length - 1) {
-                weight = '1';
-            } else if (indexInZone % 2 === 1) {
-                weight = '4';
-            } else {
-                weight = '2';
-            }
+            reason = buildMethodReason('Simpson');
             showRow = true;
         }
         
         if (showRow) {
             const interpretation = 'Simpson\'s Rule';
+            const methodKey = 'simpson';
+            const showInfo = previousMethodKey !== methodKey;
             tableHTML += `
                 <tr>
                     <td>${cl}</td>
                     <td style="color: ${zoneColor}; font-weight: bold;">${zone}</td>
-                    <td>${weight}</td>
-                    <td>${buildInterpretationBadge(interpretation, '#28a745')}</td>
+                    <td>-</td>
+                        <td>-</td>
+                    <td>${buildMethodBadge(interpretation, '#28a745', methodKey, showInfo)}</td>
                 </tr>
             `;
+            previousMethodKey = methodKey;
         }
     }
     
@@ -781,10 +948,26 @@ function generateSimpsonOnlyTable() {
 function generateSimpsonWithMethodsTable() {
     if (crossSections.length < 2) return '';
     
+    usedMethodsInCurrentTable.clear();
+    
     const hasOilSimpson = lastResults && lastResults.shouldCalcSimpsonOil;
     const hasGasSimpson = lastResults && lastResults.shouldCalcSimpsonGas;
     
-    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level</th><th>Zone</th><th>A<sub>n</sub>/A<sub>n-1</sub> or Weight</th><th>≤ 0.5 / Method</th><th>Interpretation</th></tr></thead><tbody>';
+    let tableHTML = `
+        <div class="analysis-table-wrapper" style="margin-top: 24px; overflow-x: auto;">
+            <h3 class="analysis-table-title">Interval Analysis</h3>
+            <table class="interval-analysis-table">
+                <thead>
+                    <tr>
+                        <th>Contour Level</th>
+                        <th>Zone</th>
+                        <th>A<sub>n</sub>/A<sub>n-1</sub></th>
+                        <th>&ge; 0.5</th>
+                        <th>Method Used <button type="button" class="method-info-btn" data-method-info="all-methods-mixed" aria-label="View all methods explanation">i</button></th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
     
     // Determine which zones have Simpson
     let oilCLs = [];
@@ -801,38 +984,36 @@ function generateSimpsonWithMethodsTable() {
     
     // Process oil zone: show Simpson if it applies
     if (hasOilSimpson) {
+        usedMethodsInCurrentTable.add('simpson');
+        let previousMethodKey = null;
+
         for (let i = 0; i < crossSections.length; i++) {
             const selectedZone = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
             
             if (selectedZone === 'oil') {
                 const cl = contourLines[i] !== undefined ? Math.round(contourLines[i]) : i;
-                const indexInZone = oilCLs.indexOf(i);
-                
-                let weight = '-';
-                if (indexInZone === 0 || indexInZone === oilCLs.length - 1) {
-                    weight = '1';
-                } else if (indexInZone % 2 === 1) {
-                    weight = '4';
-                } else {
-                    weight = '2';
-                }
                 
                 const interpretation = 'Simpson\'s Rule';
+                const methodKey = 'simpson';
+                const showInfo = previousMethodKey !== methodKey;
                 tableHTML += `
                     <tr>
                         <td>${cl}</td>
                         <td style="color: #1a3a52; font-weight: bold;">Oil</td>
-                        <td>${weight}</td>
                         <td>-</td>
-                        <td>${buildInterpretationBadge(interpretation, '#28a745')}</td>
+                        <td>-</td>
+                        <td>${buildMethodBadge(interpretation, '#28a745', methodKey, showInfo)}</td>
                     </tr>
                 `;
+                previousMethodKey = methodKey;
             }
         }
     }
     
     // Process gas zone: show intervals with methods
     if (hasGasSimpson || gasCLs.length > 0) {
+        let previousMethodKey = null;
+
         for (let i = 0; i < crossSections.length - 1; i++) {
             const zone1 = zoneSelections && zoneSelections[i] ? zoneSelections[i] : 'oil';
             const zone2 = zoneSelections && zoneSelections[i + 1] ? zoneSelections[i + 1] : 'oil';
@@ -847,16 +1028,28 @@ function generateSimpsonWithMethodsTable() {
                 const cl2 = contourLines[i + 1] !== undefined ? Math.round(contourLines[i + 1]) : (i + 1);
                 const method = isValidRatio ? 'Pyramidal' : 'Trapezoidal';
                 const methodColor = isValidRatio ? '#28a745' : '#007bff';
+                const methodKey = isValidRatio ? 'pyramidal' : 'trapezoidal';
+                
+                // Track which method is used
+                if (isValidRatio) {
+                    usedMethodsInCurrentTable.add('pyramidal');
+                } else {
+                    usedMethodsInCurrentTable.add('trapezoidal');
+                }
+                
+                const showInfo = previousMethodKey !== methodKey;
                 
                 tableHTML += `
                     <tr>
                         <td>${cl1}-${cl2}</td>
                         <td style="color: #dc3545; font-weight: bold;">Gas</td>
                         <td>${ratio.toFixed(2)}</td>
-                        <td style="text-align: center; color: ${isValidRatio ? '#28a745' : '#999'};">${isValidRatio ? '✓ Yes' : 'No'}</td>
-                        <td>${buildInterpretationBadge(method, methodColor)}</td>
+                        <td>${buildRatioCheck(ratio)}</td>
+                        <td>${buildMethodBadge(method, methodColor, methodKey, showInfo)}</td>
                     </tr>
                 `;
+
+                previousMethodKey = methodKey;
             }
         }
     }
@@ -869,8 +1062,26 @@ function generateSimpsonWithMethodsTable() {
 function generateMethodsOnlyTable() {
     if (crossSections.length < 2) return '';
     
-    let tableHTML = '<div style="margin-top: 24px; overflow-x: auto;"><h3>Interval Analysis</h3><table class="interval-analysis-table"><thead><tr><th>Contour Level Interval</th><th>Zone</th><th>A<sub>n</sub>/A<sub>n-1</sub></th><th>Ā<sub>n</sub>/Ā<sub>n-1</sub> ≤ 0.5</th><th>Interpretation</th></tr></thead><tbody>';
+    usedMethodsInCurrentTable.clear();
     
+    let tableHTML = `
+        <div class="analysis-table-wrapper" style="margin-top: 24px; overflow-x: auto;">
+            <h3 class="analysis-table-title">Interval Analysis</h3>
+            <table class="interval-analysis-table">
+                <thead>
+                    <tr>
+                        <th>Contour Level Interval</th>
+                        <th>Zone</th>
+                        <th>A<sub>n</sub>/A<sub>n-1</sub></th>
+                        <th>&ge; 0.5</th>
+                        <th>Method Used <button type="button" class="method-info-btn" data-method-info="all-methods-interval" aria-label="View all methods explanation">i</button></th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    let previousMethodKey = null;
+
     for (let i = 0; i < crossSections.length - 1; i++) {
         const an = crossSections[i];
         const an1 = crossSections[i + 1];
@@ -881,23 +1092,165 @@ function generateMethodsOnlyTable() {
         const method = isValidRatio ? 'Pyramidal' : 'Trapezoidal';
         const methodColor = isValidRatio ? '#28a745' : '#007bff';
         
+        // Track which method is used
+        if (isValidRatio) {
+            usedMethodsInCurrentTable.add('pyramidal');
+        } else {
+            usedMethodsInCurrentTable.add('trapezoidal');
+        }
+        
         const selectedZone = zoneSelections[i] || 'oil';
         const zone = selectedZone.charAt(0).toUpperCase() + selectedZone.slice(1);
         const zoneColor = selectedZone === 'oil' ? '#1a3a52' : '#dc3545';
+        const methodKey = isValidRatio ? 'pyramidal' : 'trapezoidal';
+        const showInfo = previousMethodKey !== methodKey;
         
         tableHTML += `
             <tr>
                 <td>${cl1}-${cl2}</td>
                 <td style="color: ${zoneColor}; font-weight: bold;">${zone}</td>
                 <td>${ratio.toFixed(2)}</td>
-                <td style="text-align: center; color: ${isValidRatio ? '#28a745' : '#999'};">${isValidRatio ? '✓ Yes' : 'No'}</td>
-                <td>${buildInterpretationBadge(method, methodColor)}</td>
+                <td>${buildRatioCheck(ratio)}</td>
+                <td>${buildMethodBadge(method, methodColor, methodKey, showInfo)}</td>
             </tr>
         `;
+
+        previousMethodKey = methodKey;
     }
     
     tableHTML += '</tbody></table></div>';
     return tableHTML;
+}
+
+function buildMethodExplanationHtml(methodKey) {
+    if (methodKey === 'all-methods-simpson' || methodKey === 'all-methods-mixed' || methodKey === 'all-methods-interval') {
+        // Show only methods that are actually used in this table
+        let explanations = [];
+
+        if (usedMethodsInCurrentTable.has('simpson')) {
+            explanations.push('<li><strong>Simpson\'s Rule:</strong> Used when an odd number of contour points with equal spacing satisfies Simpson\'s 1/3 rule.</li>');
+        }
+
+        if (usedMethodsInCurrentTable.has('pyramidal')) {
+            explanations.push('<li><strong>Pyramidal Rule:</strong> Used when the ratio A<sub>n</sub>/A<sub>n-1</sub> ≤ 0.5, indicating the interval narrows enough for better fit.</li>');
+        }
+
+        if (usedMethodsInCurrentTable.has('trapezoidal')) {
+            explanations.push('<li><strong>Trapezoidal Rule:</strong> Used when the ratio A<sub>n</sub>/A<sub>n-1</sub> > 0.5, meaning area change is not steep enough for pyramidal rule.</li>');
+        }
+
+        if (explanations.length === 0) {
+            return `<div class="method-explanation-content"><p>No methods found in this table.</p></div>`;
+        }
+
+        return `
+            <div class="method-explanation-content">
+                <p><strong>Methods Used in This Table:</strong></p>
+                <ul>${explanations.join('')}</ul>
+            </div>
+        `;
+    }
+
+    if (methodKey === 'simpson') {
+        return `
+            <div class="method-explanation-content">
+                <p><strong>Simpson's Rule</strong> is used because this section has an odd number of contour points with equal spacing.</p>
+                <p>That condition allows the rule to apply the 1, 4, 2, 4, 1 weighting pattern correctly across the row sequence.</p>
+            </div>
+        `;
+    }
+
+    if (methodKey === 'pyramidal') {
+        return `
+            <div class="method-explanation-content">
+                <p><strong>Pyramidal Rule</strong> is used because the ratio A<sub>n</sub>/A<sub>n-1</sub> is less than or equal to 0.5.</p>
+                <p>That indicates the interval narrows enough that the pyramidal approximation is the better fit.</p>
+            </div>
+        `;
+    }
+
+    if (methodKey === 'trapezoidal') {
+        return `
+            <div class="method-explanation-content">
+                <p><strong>Trapezoidal Rule</strong> is used because the ratio A<sub>n</sub>/A<sub>n-1</sub> is greater than 0.5.</p>
+                <p>That means the area change is not steep enough for the pyramidal rule, so the trapezoidal approximation is used.</p>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="method-explanation-content">
+            <p>No method explanation is available for this selection.</p>
+        </div>
+    `;
+}
+
+function ensureMethodInfoModal() {
+    let modal = document.getElementById('methodInfoModal');
+    if (modal) {
+        return modal;
+    }
+
+    document.body.insertAdjacentHTML('beforeend', `
+        <div id="methodInfoModal" class="modal method-info-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Method Explanation</h2>
+                    <button class="modal-close" type="button">&times;</button>
+                </div>
+                <div class="modal-body" id="methodInfoModalBody"></div>
+            </div>
+        </div>
+    `);
+
+    return document.getElementById('methodInfoModal');
+}
+
+function showMethodExplanationModal(methodKey) {
+    const modal = ensureMethodInfoModal();
+    const modalBody = document.getElementById('methodInfoModalBody');
+
+    if (modalBody) {
+        modalBody.innerHTML = buildMethodExplanationHtml(methodKey);
+    }
+
+    modal.classList.add('active');
+}
+
+function closeMethodExplanationModal() {
+    const modal = document.getElementById('methodInfoModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function setupMethodInfoModalHandlers() {
+    const modal = ensureMethodInfoModal();
+    const closeBtn = modal.querySelector('.modal-close');
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeMethodExplanationModal);
+    }
+
+    modal.addEventListener('click', function(event) {
+        if (event.target === modal) {
+            closeMethodExplanationModal();
+        }
+    });
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeMethodExplanationModal();
+        }
+    });
+}
+
+function bindMethodInfoButtons() {
+    document.querySelectorAll('.method-info-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            showMethodExplanationModal(this.dataset.methodInfo);
+        });
+    });
 }
 
 // Show results modal
@@ -1425,10 +1778,33 @@ window.addEventListener('load', () => {
     createHiddenCheckboxes();
     initializeTable();
     setupFormulasModalHandlers();
+    setupMethodInfoModalHandlers();
     setupBackButton();
     setupModalHandlers();
     updateComputeButtonState(); // Initialize button state
     enforceWholeNumberDisplay(); // Display whole numbers in UI
+
+    // Ensure any change in any input/select inside the form resets results
+    if (calculatorForm) {
+        calculatorForm.addEventListener('input', (e) => {
+            const tgt = e.target;
+            if (!tgt) return;
+            // Ignore non-form controls like buttons
+            const tag = (tgt.tagName || '').toUpperCase();
+            if (tag === 'BUTTON') return;
+            resetResults();
+            updateComputeButtonState();
+        }, { passive: true });
+
+        calculatorForm.addEventListener('change', (e) => {
+            const tgt = e.target;
+            if (!tgt) return;
+            const tag = (tgt.tagName || '').toUpperCase();
+            if (tag === 'BUTTON') return;
+            resetResults();
+            updateComputeButtonState();
+        });
+    }
 });
 
 // Function to enforce whole number display ONLY for specific fields
