@@ -518,13 +518,20 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
         simpsonOgip = ogipSCF / 1000000;
     }
     
+    // Use Simpson totals as the primary displayed values whenever Simpson is applicable
+    // for that zone so the summary table is consistent with the reported method.
+    const displayOilBV = shouldCalcSimpsonOil && oilSimpsonBV > 0 ? oilSimpsonBV : oilAcres;
+    const displayGasBV = shouldCalcSimpsonGas && gasSimpsonBV > 0 ? gasSimpsonBV : gasAcres;
+    const displayOoip = shouldCalcSimpsonOil && simpsonOoip !== 'N/A' ? simpsonOoip : ooip;
+    const displayOgip = shouldCalcSimpsonGas && simpsonOgip !== 'N/A' ? simpsonOgip : ogip;
+
     const result = {
-        bulkVolume: oilAcres,
-        bulkVolumeGas: gasAcres,
+        bulkVolume: displayOilBV,
+        bulkVolumeGas: displayGasBV,
         bulkVolumeInches: oilBV,
         bulkVolumeGasInches: gasBV,
-        ooip: ooip,
-        ogip: ogip,
+        ooip: displayOoip,
+        ogip: displayOgip,
         hasGOC: hasGOC,
         gocLevel: gocLevel,
         // Simpson-only results
@@ -543,11 +550,11 @@ function calculateClientSide(areas, spacing, mapScale, porosity, boi, bgi, gocLe
         isOddCLs: isOddCLs,
         calculations: {
             trapezoidal: {
-                bulkVolume: oilAcres,
-                bulkVolumeGas: gasAcres,
+                bulkVolume: displayOilBV,
+                bulkVolumeGas: displayGasBV,
                 unit: 'acre-ft',
-                ooip: ooip,
-                ogip: ogip,
+                ooip: displayOoip,
+                ogip: displayOgip,
                 numberOfIntervals: areas.length - 1
             }
         }
